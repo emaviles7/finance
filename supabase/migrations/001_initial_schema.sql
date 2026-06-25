@@ -209,7 +209,7 @@ LEFT JOIN presupuestos p ON (
   p.mes = EXTRACT(MONTH FROM t.fecha)
 )
 WHERE t.tipo = 'egreso' AND NOT t.excluir_reportes
-GROUP BY t.familia_id, t.categoria_id, c.nombre, anio, mes, p.monto_presupuestado;
+GROUP BY t.familia_id, t.categoria_id, c.nombre, EXTRACT(YEAR FROM t.fecha), EXTRACT(MONTH FROM t.fecha), p.monto_presupuestado;
 
 CREATE UNIQUE INDEX idx_mv_presupuesto_mes_pk ON mv_presupuesto_mes(familia_id, categoria_id, anio, mes);
 

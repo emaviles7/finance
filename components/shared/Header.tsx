@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MobileNav } from "@/components/shared/MobileNav";
 
 export function Header({ email }: { email?: string | null }) {
   const router = useRouter();
@@ -18,8 +19,8 @@ export function Header({ email }: { email?: string | null }) {
   const initial = email?.charAt(0).toUpperCase() ?? "?";
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4">
-      <div />
+    <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4 print:hidden">
+      <MobileNav />
       <div className="flex items-center gap-3">
         <Avatar className="h-8 w-8">
           <AvatarFallback>{initial}</AvatarFallback>

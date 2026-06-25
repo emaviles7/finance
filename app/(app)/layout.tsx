@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/shared/Sidebar";
 import { Header } from "@/components/shared/Header";
+import { RealtimeRefresher } from "@/components/shared/RealtimeRefresher";
+import { PageTransition } from "@/components/shared/PageTransition";
 
 export default async function AppLayout({
   children,
@@ -15,8 +17,9 @@ export default async function AppLayout({
 
   const { data: miembro } = await supabase
     .from("miembros")
-    .select("id")
+    .select("id, familia_id")
     .eq("user_id", user.id)
+    .limit(1)
     .maybeSingle();
 
   if (!miembro) {
@@ -25,10 +28,13 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-screen">
+      <RealtimeRefresher familiaId={miembro.familia_id} />
       <Sidebar />
       <div className="flex flex-1 flex-col">
         <Header email={user.email} />
-        <main className="flex-1 overflow-y-auto bg-background p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+          <PageTransition>{children}</PageTransition>
+        </main>
       </div>
     </div>
   );

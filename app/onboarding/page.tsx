@@ -40,34 +40,23 @@ export default function OnboardingPage() {
       return;
     }
 
-    const { data: familia, error: familiaError } = await supabase
-      .from("familias")
-      .insert({ nombre: familiaNombre })
-      .select()
-      .single();
+    const { data: familiaId, error: rpcError } = await supabase.rpc(
+      "fn_onboarding_crear_familia",
+      {
+        p_nombre_familia: familiaNombre,
+        p_nombre_usuario: user.user_metadata?.nombre ?? user.email,
+      }
+    );
 
-    if (familiaError || !familia) {
-      setError(familiaError?.message ?? "No se pudo crear la familia");
-      setLoading(false);
-      return;
-    }
-
-    const { error: miembroError } = await supabase.from("miembros").insert({
-      familia_id: familia.id,
-      user_id: user.id,
-      rol: "admin",
-      nombre: user.user_metadata?.nombre ?? user.email,
-    });
-
-    if (miembroError) {
-      setError(miembroError.message);
+    if (rpcError || !familiaId) {
+      setError(rpcError?.message ?? "No se pudo crear la familia");
       setLoading(false);
       return;
     }
 
     if (cuentaNombre.trim()) {
       await supabase.from("cuentas").insert({
-        familia_id: familia.id,
+        familia_id: familiaId,
         nombre: cuentaNombre,
         tipo: "banco",
         saldo_inicial: Number(cuentaSaldo) || 0,
@@ -77,7 +66,7 @@ export default function OnboardingPage() {
 
     await supabase.from("categorias").insert(
       CATEGORIAS_BASE.map((c, i) => ({
-        familia_id: familia.id,
+        familia_id: familiaId,
         nombre: c.nombre,
         es_ingreso: c.es_ingreso,
         color: c.color,
