@@ -5,6 +5,7 @@ import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 
 export default async function TransaccionesPage() {
   const supabase = await createClient();
@@ -107,11 +108,32 @@ export default async function TransaccionesPage() {
             mes={hoy.getMonth() + 1}
           />
           {cuentaMadreId && (
-            <TransactionSheet
-              metodosPago={metodosPagoOptions}
-              lineas={lineasOptions}
-              cuentaMadreId={cuentaMadreId}
-            />
+            <>
+              <TransactionSheet
+                metodosPago={metodosPagoOptions}
+                lineas={lineasOptions}
+                cuentaMadreId={cuentaMadreId}
+                defaultValues={{ tipo: "ingreso" }}
+                trigger={
+                  <Button variant="outline">
+                    <ArrowDownCircle className="size-4 text-accent-success" />
+                    Nuevo ingreso
+                  </Button>
+                }
+              />
+              <TransactionSheet
+                metodosPago={metodosPagoOptions}
+                lineas={lineasOptions}
+                cuentaMadreId={cuentaMadreId}
+                defaultValues={{ tipo: "egreso" }}
+                trigger={
+                  <Button>
+                    <ArrowUpCircle className="size-4" />
+                    Nuevo egreso
+                  </Button>
+                }
+              />
+            </>
           )}
         </div>
       </div>

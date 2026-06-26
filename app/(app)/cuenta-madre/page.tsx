@@ -5,6 +5,7 @@ import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { CuentaMadreLedger, type LedgerRow } from "@/components/transactions/CuentaMadreLedger";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 
 type TxTipo = "ingreso" | "egreso" | "transferencia" | "transferencia_externa";
 
@@ -139,11 +140,32 @@ export default async function CuentaMadrePage() {
             <p className="text-sm text-muted-foreground">Libro Mayor · {rows.length} movimientos</p>
           </div>
         </div>
-        <TransactionSheet
-          metodosPago={metodosPagoOptions}
-          lineas={lineasOptions}
-          cuentaMadreId={cuenta.id}
-        />
+        <div className="flex flex-wrap gap-2">
+          <TransactionSheet
+            metodosPago={metodosPagoOptions}
+            lineas={lineasOptions}
+            cuentaMadreId={cuenta.id}
+            defaultValues={{ tipo: "ingreso" }}
+            trigger={
+              <Button variant="outline">
+                <ArrowDownCircle className="size-4 text-accent-success" />
+                Nuevo ingreso
+              </Button>
+            }
+          />
+          <TransactionSheet
+            metodosPago={metodosPagoOptions}
+            lineas={lineasOptions}
+            cuentaMadreId={cuenta.id}
+            defaultValues={{ tipo: "egreso" }}
+            trigger={
+              <Button>
+                <ArrowUpCircle className="size-4" />
+                Nuevo egreso
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
