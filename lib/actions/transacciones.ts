@@ -68,7 +68,7 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
       destinatario_externo: parsed.destinatario_externo || null,
       linea_id: parsed.linea_id || null,
       categoria_id: parsed.linea_id ? undefined : null,
-      metodo_pago_id: parsed.metodo_pago_id || null,
+      metodo_pago: parsed.metodo_pago || null,
       pagado: parsed.pagado ?? true,
       fecha_pagado: parsed.fecha_pagado || null,
       notas: parsed.notas || null,
@@ -115,7 +115,7 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
       destinatario_externo: parsed.destinatario_externo || null,
       linea_id: parsed.linea_id || null,
       categoria_id: parsed.linea_id ? undefined : null,
-      metodo_pago_id: parsed.metodo_pago_id || null,
+      metodo_pago: parsed.metodo_pago || null,
       pagado: parsed.pagado ?? true,
       fecha_pagado: parsed.fecha_pagado || null,
     })

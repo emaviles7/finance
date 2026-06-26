@@ -31,7 +31,7 @@ export default async function TransaccionesPage() {
         .maybeSingle(),
       supabase
         .from("metodos_pago")
-        .select("id, nombre")
+        .select("nombre")
         .eq("familia_id", familiaId)
         .eq("activa", true)
         .order("orden")
@@ -46,8 +46,7 @@ export default async function TransaccionesPage() {
         .from("transacciones")
         .select(
           `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
-           linea_id, metodo_pago_id, pagado, fecha_pagado,
-           metodo_pago:metodos_pago(nombre),
+           linea_id, metodo_pago, pagado, fecha_pagado,
            linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, categorias(nombre))`
         )
         .eq("familia_id", familiaId)
@@ -63,7 +62,7 @@ export default async function TransaccionesPage() {
     return (Array.isArray(rel) ? rel[0] : rel) as T;
   }
 
-  const metodosPagoOptions = metodosPago ?? [];
+  const metodosPagoOptions = (metodosPago ?? []).map((m) => m.nombre);
   const lineasOptions = (lineas ?? []).map((l) => ({
     id: l.id,
     nombre: l.nombre,
@@ -85,8 +84,7 @@ export default async function TransaccionesPage() {
       linea_id: t.linea_id,
       linea_nombre: linea?.nombre ?? null,
       categoria_nombre: linea ? unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? null : null,
-      metodo_pago_id: t.metodo_pago_id,
-      metodo_pago_nombre: unwrap<{ nombre: string }>(t.metodo_pago)?.nombre ?? null,
+      metodo_pago: t.metodo_pago,
       pagado: t.pagado ?? true,
       fecha_pagado: t.fecha_pagado,
       es_ajuste_saldo: t.es_ajuste_saldo ?? false,

@@ -12,13 +12,13 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
-import { TransactionForm, type LineaOption, type MetodoPagoOption } from "./TransactionForm";
+import { TransactionForm, type LineaOption } from "./TransactionForm";
 import type { TransaccionInput, TransaccionFormInput } from "@/lib/validations/transaction.schema";
 import { crearTransaccion, actualizarTransaccion, eliminarTransaccion, restaurarTransaccion } from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 
 interface TransactionSheetProps {
-  metodosPago: MetodoPagoOption[];
+  metodosPago: string[];
   lineas: LineaOption[];
   cuentaMadreId: string;
   mode?: "create" | "edit";

@@ -50,7 +50,7 @@ import { formatDate } from "@/lib/utils/dates";
 import { eliminarTransaccion, restaurarTransaccion } from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 import { TransactionSheet } from "./TransactionSheet";
-import { type LineaOption, type MetodoPagoOption } from "./TransactionForm";
+import { type LineaOption } from "./TransactionForm";
 
 export type TransaccionRow = {
   id: string;
@@ -64,8 +64,7 @@ export type TransaccionRow = {
   linea_id: string | null;
   linea_nombre: string | null;
   categoria_nombre: string | null;
-  metodo_pago_id: string | null;
-  metodo_pago_nombre: string | null;
+  metodo_pago: string | null;
   pagado: boolean;
   fecha_pagado: string | null;
   es_ajuste_saldo: boolean;
@@ -73,7 +72,7 @@ export type TransaccionRow = {
 
 interface TransactionTableProps {
   data: TransaccionRow[];
-  metodosPago: MetodoPagoOption[];
+  metodosPago: string[];
   lineas: LineaOption[];
   cuentaMadreId: string;
 }
@@ -126,7 +125,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: T
   const filtered = useMemo(() => {
     const resultado = data.filter((t) => {
       if (tipoFiltro !== "todos" && t.tipo !== tipoFiltro) return false;
-      if (metodoFiltro !== "todos" && t.metodo_pago_id !== metodoFiltro) return false;
+      if (metodoFiltro !== "todos" && (t.metodo_pago ?? "") !== metodoFiltro) return false;
       if (lineaFiltro !== "todas" && t.linea_id !== lineaFiltro) return false;
       if (fechaInicio && t.fecha < fechaInicio) return false;
       if (fechaFin && t.fecha > fechaFin) return false;
@@ -173,11 +172,11 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: T
         ),
       },
       {
-        accessorKey: "metodo_pago_nombre",
-        header: "Método de pago",
+        accessorKey: "metodo_pago",
+        header: "Método / Origen",
         cell: ({ row }) =>
-          row.original.metodo_pago_nombre ? (
-            <span className="text-sm">{row.original.metodo_pago_nombre}</span>
+          row.original.metodo_pago ? (
+            <span className="text-sm">{row.original.metodo_pago}</span>
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
           ),
@@ -247,11 +246,10 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: T
               defaultValues={{
                 fecha: row.original.fecha,
                 descripcion: row.original.descripcion,
-                comercio: row.original.comercio ?? "",
                 monto: row.original.monto,
                 tipo: row.original.tipo === "ingreso" ? "ingreso" : "egreso",
                 linea_id: row.original.linea_id ?? "",
-                metodo_pago_id: row.original.metodo_pago_id ?? "",
+                metodo_pago: row.original.metodo_pago ?? "",
                 pagado: row.original.pagado,
                 fecha_pagado: row.original.fecha_pagado ?? "",
                 notas: row.original.notas ?? "",
@@ -322,14 +320,14 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: T
         <Select value={metodoFiltro} onValueChange={(v) => setMetodoFiltro(v ?? "todos")}>
           <SelectTrigger>
             <SelectValue placeholder="Método de pago">
-              {(v: string) => metodosPago.find((m) => m.id === v)?.nombre ?? "Todos los métodos"}
+              {(v: string) => (v === "todos" ? "Todos los métodos" : v)}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos los métodos</SelectItem>
             {metodosPago.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.nombre}
+              <SelectItem key={m} value={m}>
+                {m}
               </SelectItem>
             ))}
           </SelectContent>

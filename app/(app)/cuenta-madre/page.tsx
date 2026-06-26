@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/dashboard/KPICard";
+import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -25,7 +26,13 @@ type HistorialRow = {
   notas: string | null;
   comercio: string | null;
   destinatario_externo: string | null;
+  metodo_pago: string | null;
 };
+
+function unwrap<T>(rel: unknown): T | null {
+  if (!rel) return null;
+  return (Array.isArray(rel) ? rel[0] : rel) as T;
+}
 
 export default async function CuentaMadrePage() {
   const supabase = await createClient();
@@ -64,22 +71,44 @@ export default async function CuentaMadrePage() {
     );
   }
 
-  const [{ data: saldoRow }, { data: historial }] = await Promise.all([
-    supabase.from("v_saldo_cuentas").select("saldo_calculado").eq("id", cuenta.id).maybeSingle(),
-    supabase
-      .from("v_historial_cuenta")
-      .select(
-        "id, fecha, descripcion, tipo, es_ajuste_saldo, delta, saldo_posterior, notas, comercio, destinatario_externo"
-      )
-      .eq("cuenta_id", cuenta.id)
-      // Orden cronológico (desde la creación) para que el balance acumulado
-      // fluya naturalmente de arriba hacia abajo.
-      .order("fecha", { ascending: true })
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: saldoRow }, { data: historial }, { data: metodosPago }, { data: lineas }] =
+    await Promise.all([
+      supabase.from("v_saldo_cuentas").select("saldo_calculado").eq("id", cuenta.id).maybeSingle(),
+      supabase
+        .from("v_historial_cuenta")
+        .select(
+          "id, fecha, descripcion, tipo, es_ajuste_saldo, delta, saldo_posterior, notas, comercio, destinatario_externo, metodo_pago"
+        )
+        .eq("cuenta_id", cuenta.id)
+        // Orden cronológico (desde la creación) para que el balance acumulado
+        // fluya naturalmente de arriba hacia abajo.
+        .order("fecha", { ascending: true })
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("metodos_pago")
+        .select("nombre")
+        .eq("familia_id", familiaId)
+        .eq("activa", true)
+        .order("orden")
+        .order("nombre"),
+      supabase
+        .from("lineas_presupuestarias")
+        .select("id, nombre, categoria_id, categorias(nombre, es_ingreso)")
+        .eq("familia_id", familiaId)
+        .eq("activa", true)
+        .order("orden"),
+    ]);
 
   const balanceActual = Number(saldoRow?.saldo_calculado ?? cuenta.saldo_inicial);
   const filas = (historial ?? []) as HistorialRow[];
+
+  const metodosPagoOptions = (metodosPago ?? []).map((m) => m.nombre);
+  const lineasOptions = (lineas ?? []).map((l) => ({
+    id: l.id,
+    nombre: l.nombre,
+    categoria_nombre: unwrap<{ nombre: string }>(l.categorias)?.nombre ?? "Sin categoría",
+    es_ingreso: unwrap<{ es_ingreso: boolean }>(l.categorias)?.es_ingreso ?? false,
+  }));
 
   const ingresos = filas.filter((f) => Number(f.delta) > 0).reduce((a, f) => a + Number(f.delta), 0);
   const egresos = filas.filter((f) => Number(f.delta) < 0).reduce((a, f) => a + Math.abs(Number(f.delta)), 0);
@@ -94,9 +123,11 @@ export default async function CuentaMadrePage() {
             <p className="text-sm text-muted-foreground">Libro Mayor · {filas.length} movimientos</p>
           </div>
         </div>
-        <Link href="/transacciones">
-          <Button>Registrar movimiento</Button>
-        </Link>
+        <TransactionSheet
+          metodosPago={metodosPagoOptions}
+          lineas={lineasOptions}
+          cuentaMadreId={cuenta.id}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -129,7 +160,8 @@ export default async function CuentaMadrePage() {
             <TableBody>
               {filas.map((f) => {
                 const delta = Number(f.delta);
-                const destinatarioOrigen = f.destinatario_externo || f.comercio || "—";
+                const destinatarioOrigen =
+                  f.destinatario_externo || f.comercio || f.metodo_pago || "—";
                 return (
                   <TableRow key={f.id}>
                     <TableCell className="whitespace-nowrap">{formatDate(f.fecha)}</TableCell>

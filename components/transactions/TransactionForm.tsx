@@ -21,9 +21,7 @@ import {
 } from "@/components/ui/select";
 import { todayISO } from "@/lib/utils/dates";
 
-export type CuentaOption = { id: string; nombre: string };
 export type LineaOption = { id: string; nombre: string; categoria_nombre: string; es_ingreso: boolean };
-export type MetodoPagoOption = { id: string; nombre: string };
 
 const TIPO_LABELS: Record<string, string> = {
   egreso: "Egreso",
@@ -31,8 +29,8 @@ const TIPO_LABELS: Record<string, string> = {
 };
 
 interface TransactionFormProps {
-  /** Lista de métodos de pago (etiquetas) administrada por el usuario. */
-  metodosPago: MetodoPagoOption[];
+  /** Sugerencias de método de pago / origen (lista guardada). Se permite texto libre. */
+  metodosPago: string[];
   lineas: LineaOption[];
   /** Cuenta Madre: todas las transacciones se contabilizan contra ella (bolsa única). */
   cuentaMadreId: string;
@@ -62,17 +60,13 @@ export function TransactionForm({
     defaultValues: {
       fecha: todayISO(),
       descripcion: "",
-      comercio: "",
       monto: 0,
       tipo: "egreso",
       cuenta_origen_id: cuentaMadreId,
-      cuenta_destino_id: "",
-      destinatario_externo: "",
       linea_id: "",
-      metodo_pago_id: "",
+      metodo_pago: "",
       pagado: true,
       fecha_pagado: "",
-      guardarBeneficiario: false,
       notas: "",
       ...defaultValues,
     },
@@ -91,8 +85,7 @@ export function TransactionForm({
       className="flex flex-1 flex-col gap-4 overflow-y-auto p-4"
       onSubmit={handleSubmit(onSubmit)}
     >
-      {/* La Cuenta Madre se contabiliza siempre (bolsa única); su id se
-          siembra en defaultValues y se mantiene oculto en el formulario. */}
+      {/* La Cuenta Madre se contabiliza siempre (bolsa única). */}
       <input type="hidden" {...register("cuenta_origen_id")} />
 
       <div className="space-y-2">
@@ -138,46 +131,31 @@ export function TransactionForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="comercio">Destinatario / Origen (opcional)</Label>
+        <Label htmlFor="metodo_pago">
+          {tipo === "ingreso" ? "Origen del ingreso (opcional)" : "Método de pago (opcional)"}
+        </Label>
         <Input
-          id="comercio"
-          placeholder={tipo === "ingreso" ? "¿De quién proviene?" : "¿A quién se envió?"}
-          {...register("comercio")}
+          id="metodo_pago"
+          list="metodos-pago-lista"
+          placeholder={
+            tipo === "ingreso"
+              ? "De qué cuenta proviene (o escribe uno momentáneo)"
+              : "Cómo se pagó (o escribe uno momentáneo)"
+          }
+          {...register("metodo_pago")}
         />
+        <datalist id="metodos-pago-lista">
+          {metodosPago.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+        {tipo === "egreso" && (
+          <p className="text-xs text-muted-foreground">El egreso sale de la Cuenta Madre.</p>
+        )}
       </div>
 
       <div className="space-y-2">
-        <Label>Método de pago</Label>
-        <Controller
-          control={control}
-          name="metodo_pago_id"
-          render={({ field }) => (
-            <Select value={field.value ?? ""} onValueChange={field.onChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona un método de pago">
-                  {(v: string) => metodosPago.find((m) => m.id === v)?.nombre || "Selecciona un método de pago"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {metodosPago.length === 0 ? (
-                  <SelectItem value="" disabled>
-                    Crea métodos de pago en Configuración
-                  </SelectItem>
-                ) : (
-                  metodosPago.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.nombre}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Línea presupuestaria</Label>
+        <Label>Línea presupuestaria (opcional)</Label>
         <Controller
           control={control}
           name="linea_id"
