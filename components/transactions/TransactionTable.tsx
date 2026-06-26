@@ -68,6 +68,7 @@ export type TransaccionRow = {
   cuenta_destino_nombre: string | null;
   linea_nombre: string | null;
   categoria_nombre: string | null;
+  es_ajuste_saldo: boolean;
 };
 
 interface TransactionTableProps {
@@ -206,6 +207,9 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
         accessorKey: "tipo",
         header: "Tipo",
         cell: ({ row }) => {
+          if (row.original.es_ajuste_saldo) {
+            return <Badge className="bg-muted text-muted-foreground">Ajuste de saldo</Badge>;
+          }
           const meta = TIPO_BADGE[row.original.tipo];
           return <Badge className={meta.className}>{meta.label}</Badge>;
         },

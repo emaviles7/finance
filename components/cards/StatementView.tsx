@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/dates";
-import { cerrarEstadoCuenta } from "@/lib/actions/estados-cuenta";
+import { cerrarEstadoCuenta, reabrirEstadoCuenta, marcarEstadoPagado } from "@/lib/actions/estados-cuenta";
+import { RotateCcwIcon } from "lucide-react";
 
 export type EstadoCuentaRow = {
   id: string;
@@ -28,6 +29,7 @@ export type EstadoCuentaRow = {
   saldo_final: number;
   minimo_a_pagar: number;
   pagado: boolean;
+  cerrado: boolean;
 };
 
 interface StatementViewProps {
@@ -49,6 +51,7 @@ export function StatementView({
 }: StatementViewProps) {
   const router = useRouter();
   const [closing, setClosing] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function handleCerrar() {
     setClosing(true);
@@ -60,6 +63,32 @@ export function StatementView({
       toast.error(err instanceof Error ? err.message : "Error al cerrar estado");
     } finally {
       setClosing(false);
+    }
+  }
+
+  async function handleTogglePagado(estadoId: string, pagado: boolean) {
+    setBusyId(estadoId);
+    try {
+      await marcarEstadoPagado(estadoId, pagado);
+      toast.success(pagado ? "Marcado como pagada" : "Marcado como pendiente");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al actualizar");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReabrir(estadoId: string) {
+    setBusyId(estadoId);
+    try {
+      await reabrirEstadoCuenta(estadoId);
+      toast.success("Estado de cuenta reabierto");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al reabrir");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -108,6 +137,8 @@ export function StatementView({
                   <TableHead>Saldo final</TableHead>
                   <TableHead>Mínimo a pagar</TableHead>
                   <TableHead>Fecha de pago</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -121,6 +152,36 @@ export function StatementView({
                     <TableCell className="text-mono-amount">{formatCurrency(e.saldo_final)}</TableCell>
                     <TableCell className="text-mono-amount">{formatCurrency(e.minimo_a_pagar)}</TableCell>
                     <TableCell>{formatDate(e.fecha_pago)}</TableCell>
+                    <TableCell>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="size-4"
+                          checked={e.pagado}
+                          disabled={busyId === e.id}
+                          onChange={(ev) => handleTogglePagado(e.id, ev.target.checked)}
+                        />
+                        {e.pagado ? "Pagada" : "Pendiente"}
+                      </label>
+                      {!e.cerrado && (
+                        <Badge className="ml-2 bg-accent-warning/15 text-[10px] text-accent-warning">
+                          Reabierto
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {e.cerrado && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={busyId === e.id}
+                          onClick={() => handleReabrir(e.id)}
+                          title="Reabrir este período"
+                        >
+                          <RotateCcwIcon className="size-4" />
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -10,7 +10,7 @@ export const transaccionTipoSchema = z.enum([
 export const transaccionSchema = z
   .object({
     fecha: z.string().min(1, "La fecha es requerida"),
-    descripcion: z.string().min(1, "La descripción es requerida").max(255),
+    descripcion: z.string().max(255).optional().or(z.literal("")),
     comercio: z.string().max(100).optional().or(z.literal("")),
     monto: z.coerce.number().positive("El monto debe ser mayor a 0"),
     tipo: transaccionTipoSchema,

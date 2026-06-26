@@ -9,8 +9,6 @@ test("importar transacciones desde CSV", async ({ page }) => {
     nombre: "Usuario Import",
     email,
     password: "Test1234!",
-    familiaNombre: "Familia E2E Import",
-    cuentaNombre: "Cuenta E2E Import",
   });
 
   await page.goto("/transacciones");
@@ -21,7 +19,7 @@ test("importar transacciones desde CSV", async ({ page }) => {
 
   // Paso 2: mapeo + cuenta destino
   await expect(page.getByText("3 filas detectadas")).toBeVisible();
-  await selectOption(page, "Selecciona una cuenta", "Cuenta E2E Import");
+  await selectOption(page, "Selecciona una cuenta", "Cuenta Principal");
 
   await page.getByRole("button", { name: /Importar 3 transacciones/ }).click();
 

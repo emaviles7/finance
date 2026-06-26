@@ -4,6 +4,13 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { transaccionSchema, type TransaccionInput } from "@/lib/validations/transaction.schema";
 
+const DESCRIPCION_DEFECTO: Record<string, string> = {
+  ingreso: "Ingreso",
+  egreso: "Egreso",
+  transferencia: "Transferencia Interna",
+  transferencia_externa: "Transferencia Externa",
+};
+
 async function getFamiliaId() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -29,7 +36,7 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
     .insert({
       familia_id: familiaId,
       fecha: parsed.fecha,
-      descripcion: parsed.descripcion,
+      descripcion: parsed.descripcion || DESCRIPCION_DEFECTO[parsed.tipo] || "Movimiento",
       comercio: parsed.comercio || null,
       monto: parsed.monto,
       tipo: parsed.tipo,
@@ -71,7 +78,7 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
     .from("transacciones")
     .update({
       fecha: parsed.fecha,
-      descripcion: parsed.descripcion,
+      descripcion: parsed.descripcion || DESCRIPCION_DEFECTO[parsed.tipo] || "Movimiento",
       comercio: parsed.comercio || null,
       monto: parsed.monto,
       tipo: parsed.tipo,

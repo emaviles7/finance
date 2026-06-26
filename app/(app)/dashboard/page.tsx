@@ -48,7 +48,7 @@ export default async function DashboardPage() {
     supabase
       .from("transacciones")
       .select(
-        "monto, tipo, fecha, linea_id, lineas_presupuestarias(nombre, color, categorias(nombre, color))"
+        "monto, tipo, fecha, linea_id, es_ajuste_saldo, lineas_presupuestarias(nombre, color, categorias(nombre, color))"
       )
       .eq("familia_id", familiaId)
       .gte("fecha", format(inicioMesActual, "yyyy-MM-dd")),
@@ -57,6 +57,7 @@ export default async function DashboardPage() {
       .select("monto, tipo, fecha")
       .eq("familia_id", familiaId)
       .in("tipo", ["ingreso", "egreso", "transferencia_externa"])
+      .eq("es_ajuste_saldo", false)
       .gte("fecha", format(inicioRango6Meses, "yyyy-MM-dd")),
     supabase
       .from("lineas_presupuestarias")
@@ -83,12 +84,16 @@ export default async function DashboardPage() {
     .reduce((acc, c) => acc + (saldoPorCuenta.get(c.id) ?? 0), 0);
 
   const esGasto = (tipo: string) => (GASTO_TIPOS as readonly string[]).includes(tipo);
+  // Un ajuste de saldo inicial no es un ingreso/gasto real: solo
+  // establece el punto de partida del mes para la cuenta, no debe
+  // contarse en ningún KPI de ingresos/gastos/presupuesto.
+  const txMesReal = (txMes ?? []).filter((t) => !t.es_ajuste_saldo);
 
-  const ingresosMes = (txMes ?? [])
+  const ingresosMes = txMesReal
     .filter((t) => t.tipo === "ingreso")
     .reduce((acc, t) => acc + Number(t.monto), 0);
 
-  const gastosMes = (txMes ?? [])
+  const gastosMes = txMesReal
     .filter((t) => esGasto(t.tipo))
     .reduce((acc, t) => acc + Number(t.monto), 0);
 
@@ -97,7 +102,7 @@ export default async function DashboardPage() {
   // porque `lineas` solo trae líneas con activa=true.
   const presupuestoPorLinea = new Map((presupuestos ?? []).map((p) => [p.linea_id, Number(p.monto_presupuestado)]));
   const gastoPorLinea = new Map<string, number>();
-  for (const t of txMes ?? []) {
+  for (const t of txMesReal) {
     if (!esGasto(t.tipo) || !t.linea_id) continue;
     gastoPorLinea.set(t.linea_id, (gastoPorLinea.get(t.linea_id) ?? 0) + Number(t.monto));
   }
@@ -119,7 +124,7 @@ export default async function DashboardPage() {
   }));
 
   const gastosPorCategoriaMap = new Map<string, GastoCategoria>();
-  for (const t of txMes ?? []) {
+  for (const t of txMesReal) {
     if (!esGasto(t.tipo)) continue;
     const linea = unwrap<{ nombre: string; color: string; categorias: unknown }>(t.lineas_presupuestarias);
     const categoria = linea ? unwrap<{ nombre: string; color: string }>(linea.categorias) : null;

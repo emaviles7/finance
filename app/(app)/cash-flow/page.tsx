@@ -43,18 +43,21 @@ export default async function CashFlowPage({
   const fechaInicio =
     periodo === "anual" ? startOfYear(hoy) : periodo === "trimestral" ? startOfQuarter(hoy) : startOfMonth(hoy);
 
-  const { data: transacciones } = await supabase
+  const { data: transaccionesRaw } = await supabase
     .from("transacciones")
-    .select("monto, tipo, fecha, linea_id, lineas_presupuestarias(categorias(nombre, color))")
+    .select("monto, tipo, fecha, linea_id, es_ajuste_saldo, lineas_presupuestarias(categorias(nombre, color))")
     .eq("familia_id", familiaId)
     .gte("fecha", format(fechaInicio, "yyyy-MM-dd"));
 
-  const ingresos = (transacciones ?? [])
+  // Un ajuste de saldo inicial no es un ingreso/gasto real del período.
+  const transacciones = (transaccionesRaw ?? []).filter((t) => !t.es_ajuste_saldo);
+
+  const ingresos = transacciones
     .filter((t) => t.tipo === "ingreso")
     .reduce((acc, t) => acc + Number(t.monto), 0);
 
   const gastosPorCategoriaMap = new Map<string, { total: number; color: string }>();
-  for (const t of transacciones ?? []) {
+  for (const t of transacciones) {
     if (t.tipo !== "egreso" && t.tipo !== "transferencia_externa") continue;
     const linea = unwrap<{ categorias: unknown }>(t.lineas_presupuestarias);
     const cat = linea ? unwrap<{ nombre: string; color: string }>(linea.categorias) : null;

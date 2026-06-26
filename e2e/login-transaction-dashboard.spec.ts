@@ -8,11 +8,9 @@ test("registro -> onboarding -> crear transacción -> dashboard se actualiza", a
     nombre: "Usuario E2E",
     email,
     password: "Test1234!",
-    familiaNombre: "Familia E2E Transacciones",
-    cuentaNombre: "Cuenta E2E Tx",
   });
 
-  await expect(page.getByText("Familia E2E Transacciones")).toBeVisible();
+  await expect(page.getByText("Familia de Usuario E2E")).toBeVisible();
 
   await page.goto("/transacciones");
   await page.getByRole("button", { name: "Nueva transacción" }).click();
@@ -23,7 +21,7 @@ test("registro -> onboarding -> crear transacción -> dashboard se actualiza", a
   await page.locator("#descripcion").fill("Salario E2E");
   await page.locator("#monto").fill("500");
 
-  await selectOption(page, "Selecciona una cuenta", "Cuenta E2E Tx");
+  await selectOption(page, "Selecciona una cuenta", "Cuenta Principal");
 
   await page.getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByText("Salario E2E")).toBeVisible({ timeout: 10000 });

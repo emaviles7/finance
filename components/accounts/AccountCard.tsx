@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PencilIcon, Trash2Icon, StarIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
 import { AccountSheet } from "@/components/accounts/AccountSheet";
+import { SaldoInicialMesDialog } from "@/components/accounts/SaldoInicialMesDialog";
 import { marcarCuentaMadre, eliminarCuenta, restaurarCuenta } from "@/lib/actions/cuentas";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 import type { CuentaFormInput } from "@/lib/validations/account.schema";
@@ -133,6 +134,9 @@ export function AccountCard({ cuenta, saldo }: { cuenta: CuentaCardData; saldo: 
             <StarIcon className="size-3.5" />
             Marcar como Cuenta Madre
           </Button>
+        )}
+        {cuenta.es_cuenta_madre && (
+          <SaldoInicialMesDialog cuentaId={cuenta.id} cuentaNombre={cuenta.nombre} />
         )}
       </CardContent>
     </Card>

@@ -71,7 +71,7 @@ export default async function ReportesPage({
   let query = supabase
     .from("transacciones")
     .select(
-      `id, fecha, descripcion, monto, tipo, notas, cuenta_origen_id, linea_id,
+      `id, fecha, descripcion, monto, tipo, notas, es_ajuste_saldo, cuenta_origen_id, linea_id,
        lineas_presupuestarias(nombre, categorias(nombre)),
        cuentas!transacciones_cuenta_origen_id_fkey(nombre)`
     )
@@ -94,6 +94,7 @@ export default async function ReportesPage({
       notas: t.notas as string | null,
       monto: Number(t.monto),
       tipo: t.tipo,
+      esAjusteSaldo: t.es_ajuste_saldo ?? false,
       linea: linea?.nombre ?? "Sin línea",
       categoria: linea ? unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? "Sin categoría" : "Sin categoría",
       cuenta: unwrap<{ nombre: string }>(t.cuentas)?.nombre ?? "—",
@@ -104,6 +105,10 @@ export default async function ReportesPage({
   const porLineaMap = new Map<string, { presupuestado: number; gastado: number }>();
   const porCuentaMap = new Map<string, { ingresos: number; gastos: number }>();
   for (const f of filas) {
+    // Un ajuste de saldo inicial no es un ingreso/gasto real: solo
+    // establece el punto de partida del mes, no debe contarse en los
+    // totales de ingresos/gastos por categoría o cuenta.
+    if (f.esAjusteSaldo) continue;
     const cat = porCategoriaMap.get(f.categoria) ?? { ingresos: 0, gastos: 0 };
     const cue = porCuentaMap.get(f.cuenta) ?? { ingresos: 0, gastos: 0 };
     if (f.tipo === "ingreso") {
@@ -357,7 +362,7 @@ export default async function ReportesPage({
                       </TableCell>
                       <TableCell>{f.cuenta}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {TIPO_LABEL[f.tipo] ?? f.tipo}
+                        {f.esAjusteSaldo ? "Ajuste de saldo" : TIPO_LABEL[f.tipo] ?? f.tipo}
                       </TableCell>
                       <TableCell
                         className={

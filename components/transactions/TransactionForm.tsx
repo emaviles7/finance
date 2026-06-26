@@ -123,7 +123,7 @@ export function TransactionForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="descripcion">Descripción</Label>
+        <Label htmlFor="descripcion">Descripción (opcional)</Label>
         <Input id="descripcion" placeholder="Ej. Supermercado Walmart" {...register("descripcion")} />
         {errors.descripcion && (
           <p className="text-xs text-destructive">{errors.descripcion.message}</p>

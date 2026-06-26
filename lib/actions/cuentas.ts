@@ -88,6 +88,66 @@ export async function marcarCuentaMadre(id: string) {
   revalidatePath("/reportes");
 }
 
+/**
+ * Establece el balance inicial de la Cuenta Madre al comenzar un mes
+ * (útil para migrar desde un sistema externo). Se modela como una sola
+ * transacción de ajuste (ingreso o egreso según el signo de la
+ * diferencia), marcada con es_ajuste_saldo + excluir_reportes, fechada
+ * el primer día del mes. No crea ningún cálculo de saldo paralelo: el
+ * trigger fn_actualizar_saldo ya existente se encarga de aplicarlo, así
+ * que sigue habiendo una sola fuente de verdad (el ledger).
+ */
+export async function establecerSaldoInicialMes(cuentaId: string, anio: number, mes: number, saldoDeseado: number) {
+  const { supabase, familiaId, userId } = await getFamiliaId();
+  const primerDia = `${anio}-${String(mes).padStart(2, "0")}-01`;
+
+  const { data: cuenta, error: cuentaError } = await supabase
+    .from("cuentas")
+    .select("saldo_inicial")
+    .eq("id", cuentaId)
+    .single();
+  if (cuentaError) throw new Error(cuentaError.message);
+
+  const { data: previas, error: txError } = await supabase
+    .from("transacciones")
+    .select("tipo, monto, cuenta_origen_id, cuenta_destino_id")
+    .eq("familia_id", familiaId)
+    .lt("fecha", primerDia)
+    .or(`cuenta_origen_id.eq.${cuentaId},cuenta_destino_id.eq.${cuentaId}`);
+  if (txError) throw new Error(txError.message);
+
+  const saldoActual = (previas ?? []).reduce((acc, t) => {
+    const monto = Number(t.monto);
+    if (t.cuenta_origen_id === cuentaId) {
+      if (t.tipo === "ingreso") return acc + monto;
+      if (t.tipo === "egreso" || t.tipo === "transferencia_externa" || t.tipo === "transferencia") return acc - monto;
+    }
+    if (t.cuenta_destino_id === cuentaId && t.tipo === "transferencia") return acc + monto;
+    return acc;
+  }, Number(cuenta.saldo_inicial));
+
+  const diferencia = saldoDeseado - saldoActual;
+  if (diferencia === 0) return;
+
+  const { error } = await supabase.from("transacciones").insert({
+    familia_id: familiaId,
+    cuenta_origen_id: cuentaId,
+    fecha: primerDia,
+    descripcion: `Ajuste de saldo inicial (${mes}/${anio})`,
+    monto: Math.abs(diferencia),
+    tipo: diferencia > 0 ? "ingreso" : "egreso",
+    es_ajuste_saldo: true,
+    excluir_reportes: true,
+    created_by: userId,
+  });
+  if (error) throw new Error(error.message);
+
+  await supabase.rpc("fn_recalcular_saldo_cuenta", { p_cuenta_id: cuentaId });
+  revalidatePath("/cuentas");
+  revalidatePath("/dashboard");
+  revalidatePath("/transacciones");
+}
+
 export async function eliminarCuenta(id: string) {
   const { supabase, userId } = await getFamiliaId();
   const { error } = await supabase

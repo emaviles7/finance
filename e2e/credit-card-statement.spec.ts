@@ -8,8 +8,6 @@ test("crear tarjeta de crédito y cerrar estado de cuenta", async ({ page }) => 
     nombre: "Usuario Tarjeta",
     email,
     password: "Test1234!",
-    familiaNombre: "Familia E2E Tarjeta",
-    cuentaNombre: "Cuenta E2E Tarjeta",
   });
 
   await page.goto("/cuentas");

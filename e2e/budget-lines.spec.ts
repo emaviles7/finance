@@ -8,8 +8,6 @@ test("categorías y líneas presupuestarias independientes (mismo mes, misma cat
     nombre: "Usuario Lineas",
     email,
     password: "Test1234!",
-    familiaNombre: "Familia E2E Lineas",
-    cuentaNombre: "Cuenta E2E Lineas",
   });
 
   // Crear categoría "Alimentación" desde Configuración
@@ -22,10 +20,10 @@ test("categorías y líneas presupuestarias independientes (mismo mes, misma cat
   // Crear dos líneas presupuestarias bajo la misma categoría
   await page.goto("/presupuestos");
   await page.getByRole("button", { name: "Nueva línea" }).click();
-  await page.locator("#nombre").fill("Supermercado");
+  await page.locator("#nombre").fill("Mercado Local");
   await selectOption(page, "Selecciona una categoría", "Alimentación");
   await page.getByRole("button", { name: "Guardar" }).click();
-  await expect(page.getByRole("link", { name: "Supermercado" }).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("link", { name: "Mercado Local" }).first()).toBeVisible({ timeout: 10000 });
 
   await page.getByRole("button", { name: "Nueva línea" }).click();
   await page.locator("#nombre").fill("Restaurantes");
@@ -33,8 +31,8 @@ test("categorías y líneas presupuestarias independientes (mismo mes, misma cat
   await page.getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByRole("link", { name: "Restaurantes" }).first()).toBeVisible({ timeout: 10000 });
 
-  // Asignar presupuesto a "Supermercado"
-  await page.getByRole("button", { name: "Editar presupuesto Supermercado" }).click();
+  // Asignar presupuesto a "Mercado Local"
+  await page.getByRole("button", { name: "Editar presupuesto Mercado Local" }).click();
   await page.locator('input[type="number"]').first().fill("200");
   await page.getByRole("button", { name: "Guardar" }).click();
   // El toast es efímero (se autodescarta); en vez de esperarlo, se espera a
@@ -51,8 +49,8 @@ test("categorías y líneas presupuestarias independientes (mismo mes, misma cat
 
   // Ambas líneas deben mostrar su propio presupuesto en la tabla general,
   // de forma independiente.
-  const filaSupermercado = page.getByRole("row", { name: /Supermercado/ });
+  const filaMercadoLocal = page.getByRole("row", { name: /Mercado Local/ });
   const filaRestaurantes = page.getByRole("row", { name: /Restaurantes/ });
-  await expect(filaSupermercado).toContainText("$200.00");
+  await expect(filaMercadoLocal).toContainText("$200.00");
   await expect(filaRestaurantes).toContainText("$80.00");
 });

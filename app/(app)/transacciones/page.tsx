@@ -32,7 +32,7 @@ export default async function TransaccionesPage() {
     supabase
       .from("transacciones")
       .select(
-        `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo,
+        `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
          cuenta_origen_id, cuenta_destino_id, linea_id,
          cuenta_origen:cuentas!transacciones_cuenta_origen_id_fkey(nombre),
          cuenta_destino:cuentas!transacciones_cuenta_destino_id_fkey(nombre),
@@ -84,6 +84,7 @@ export default async function TransaccionesPage() {
       cuenta_destino_nombre: nombreDe(t.cuenta_destino),
       linea_nombre: linea?.nombre ?? null,
       categoria_nombre: linea ? unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? null : null,
+      es_ajuste_saldo: t.es_ajuste_saldo ?? false,
     };
   });
 
