@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -88,7 +89,9 @@ export function AccountCard({ cuenta, saldo }: { cuenta: CuentaCardData; saldo: 
       <CardHeader className="flex flex-row items-start justify-between pb-2">
         <div>
           <div className="flex items-center gap-1.5">
-            <p className="font-medium">{cuenta.nombre}</p>
+            <Link href={`/cuentas/${cuenta.id}`} className="font-medium hover:underline">
+              {cuenta.nombre}
+            </Link>
             {cuenta.es_cuenta_madre && (
               <Badge className="bg-primary/15 text-[10px] text-primary">Cuenta Madre</Badge>
             )}

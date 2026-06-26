@@ -4,6 +4,7 @@ import { BudgetBar } from "@/components/budgets/BudgetBar";
 import { LineaSheet } from "@/components/budgets/LineaSheet";
 import { LineaTable, type LineaResumen } from "@/components/budgets/LineaTable";
 import { BudgetIndicators } from "@/components/budgets/BudgetIndicators";
+import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -174,6 +175,11 @@ export default async function PresupuestosPage({
               <ChevronRight className="size-4" />
             </Button>
           </Link>
+          <TransferenciaLineaDialog
+            lineas={lineasConCategoria.map((l) => ({ id: l.id, nombre: l.nombre, categoriaNombre: l.categoria_nombre }))}
+            anio={anio}
+            mes={mes}
+          />
           <LineaSheet categorias={categorias ?? []} />
         </div>
       </div>

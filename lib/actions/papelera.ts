@@ -9,7 +9,8 @@ export type PapeleraTabla =
   | "lineas_presupuestarias"
   | "presupuestos"
   | "reglas"
-  | "metas_ahorro";
+  | "metas_ahorro"
+  | "obligaciones";
 
 export type PapeleraItem = {
   tabla: PapeleraTabla;
@@ -37,7 +38,7 @@ async function getFamiliaId() {
 export async function listarPapelera(): Promise<PapeleraItem[]> {
   const { supabase, familiaId } = await getFamiliaId();
 
-  const [cuentas, categorias, lineas, presupuestos, reglas, metas] = await Promise.all([
+  const [cuentas, categorias, lineas, presupuestos, reglas, metas, obligaciones] = await Promise.all([
     supabase
       .from("cuentas")
       .select("id, nombre, deleted_at")
@@ -68,6 +69,11 @@ export async function listarPapelera(): Promise<PapeleraItem[]> {
       .select("id, nombre, deleted_at")
       .eq("familia_id", familiaId)
       .not("deleted_at", "is", null),
+    supabase
+      .from("obligaciones")
+      .select("id, nombre, deleted_at")
+      .eq("familia_id", familiaId)
+      .not("deleted_at", "is", null),
   ]);
 
   const items: PapeleraItem[] = [
@@ -82,6 +88,7 @@ export async function listarPapelera(): Promise<PapeleraItem[]> {
     })),
     ...(reglas.data ?? []).map((r) => ({ tabla: "reglas" as const, id: r.id, nombre: r.patron, deleted_at: r.deleted_at })),
     ...(metas.data ?? []).map((r) => ({ tabla: "metas_ahorro" as const, id: r.id, nombre: r.nombre, deleted_at: r.deleted_at })),
+    ...(obligaciones.data ?? []).map((r) => ({ tabla: "obligaciones" as const, id: r.id, nombre: r.nombre, deleted_at: r.deleted_at })),
   ];
 
   return items.sort((a, b) => new Date(b.deleted_at).getTime() - new Date(a.deleted_at).getTime());

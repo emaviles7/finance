@@ -10,6 +10,7 @@ import {
   Wand2,
   Trash2,
   Settings,
+  HandCoins,
 } from "lucide-react";
 
 export const NAV_ITEMS = [
@@ -18,6 +19,7 @@ export const NAV_ITEMS = [
   { href: "/cuentas", label: "Cuentas", icon: Wallet },
   { href: "/presupuestos", label: "Presupuestos", icon: PiggyBank },
   { href: "/tarjetas", label: "Tarjetas", icon: CreditCard },
+  { href: "/obligaciones", label: "Obligaciones", icon: HandCoins },
   { href: "/cash-flow", label: "Cash Flow", icon: TrendingUp },
   { href: "/ahorro", label: "Ahorro", icon: Target },
   { href: "/reportes", label: "Reportes", icon: FileBarChart },

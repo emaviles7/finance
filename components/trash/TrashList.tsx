@@ -22,6 +22,7 @@ import { restaurarLinea } from "@/lib/actions/lineas-presupuestarias";
 import { restaurarPresupuesto } from "@/lib/actions/presupuestos";
 import { restaurarRegla } from "@/lib/actions/reglas";
 import { restaurarMeta } from "@/lib/actions/metas";
+import { restaurarObligacion } from "@/lib/actions/obligaciones";
 
 const TABLA_LABELS: Record<PapeleraTabla, string> = {
   cuentas: "Cuenta",
@@ -30,6 +31,7 @@ const TABLA_LABELS: Record<PapeleraTabla, string> = {
   presupuestos: "Presupuesto",
   reglas: "Regla",
   metas_ahorro: "Meta de ahorro",
+  obligaciones: "Obligación de pago",
 };
 
 const RESTAURAR_FN: Record<PapeleraTabla, (id: string) => Promise<unknown>> = {
@@ -39,6 +41,7 @@ const RESTAURAR_FN: Record<PapeleraTabla, (id: string) => Promise<unknown>> = {
   presupuestos: restaurarPresupuesto,
   reglas: restaurarRegla,
   metas_ahorro: restaurarMeta,
+  obligaciones: restaurarObligacion,
 };
 
 export function TrashList({ items }: { items: PapeleraItem[] }) {

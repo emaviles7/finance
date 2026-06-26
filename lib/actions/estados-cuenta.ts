@@ -86,27 +86,55 @@ export async function cerrarEstadoCuenta(cuentaId: string) {
   const saldoAnterior = Number(ultimoEstado?.saldo_final ?? cuenta.saldo_inicial ?? 0);
   const saldoFinal = saldoAnterior + compras - pagos;
 
-  const { error } = await supabase.from("estados_cuenta").upsert(
-    {
-      id: existente?.id,
-      cuenta_id: cuentaId,
-      familia_id: familiaId,
-      fecha_inicio: format(fechaInicio, "yyyy-MM-dd"),
-      fecha_corte: fechaCorteStr,
-      fecha_pago: format(fechaPago, "yyyy-MM-dd"),
-      saldo_anterior: saldoAnterior,
-      compras,
-      pagos,
-      saldo_final: saldoFinal,
-      minimo_a_pagar: Math.max(saldoFinal * 0.05, 0),
-      cerrado: true,
-      updated_by: userId,
-    },
-    { onConflict: "cuenta_id,fecha_corte" }
-  );
+  const { data: estado, error } = await supabase
+    .from("estados_cuenta")
+    .upsert(
+      {
+        id: existente?.id,
+        cuenta_id: cuentaId,
+        familia_id: familiaId,
+        fecha_inicio: format(fechaInicio, "yyyy-MM-dd"),
+        fecha_corte: fechaCorteStr,
+        fecha_pago: format(fechaPago, "yyyy-MM-dd"),
+        saldo_anterior: saldoAnterior,
+        compras,
+        pagos,
+        saldo_final: saldoFinal,
+        minimo_a_pagar: Math.max(saldoFinal * 0.05, 0),
+        cerrado: true,
+        updated_by: userId,
+      },
+      { onConflict: "cuenta_id,fecha_corte" }
+    )
+    .select("id")
+    .single();
 
   if (error) throw new Error(error.message);
+
+  // Crea o actualiza la obligación enlazada (módulo unificado de Fase 3)
+  // sin tocar la lógica de cálculo de la tarjeta: solo refleja el monto
+  // del período recién cerrado. fecha_pago queda null hasta que se
+  // marque como pagada (esa fecha es la del pago real, no el vencimiento
+  // — el vencimiento ya vive en estados_cuenta.fecha_pago).
+  const { data: cuentaNombre } = await supabase.from("cuentas").select("nombre").eq("id", cuentaId).single();
+  await supabase.from("obligaciones").upsert(
+    {
+      familia_id: familiaId,
+      tipo: "tarjeta_credito",
+      nombre: cuentaNombre?.nombre ?? "Tarjeta de crédito",
+      monto_total: saldoFinal,
+      estado: "pendiente",
+      anio: fechaCorte.getFullYear(),
+      mes: fechaCorte.getMonth() + 1,
+      cuenta_pago_id: cuentaId,
+      estado_cuenta_id: estado.id,
+      created_by: userId,
+    },
+    { onConflict: "estado_cuenta_id" }
+  );
+
   revalidatePath("/tarjetas");
+  revalidatePath("/obligaciones");
 }
 
 /**
@@ -122,7 +150,14 @@ export async function reabrirEstadoCuenta(estadoId: string) {
     .eq("id", estadoId);
 
   if (error) throw new Error(error.message);
+
+  await supabase
+    .from("obligaciones")
+    .update({ estado: "pendiente", fecha_pago: null, monto_pagado: null, updated_by: userId })
+    .eq("estado_cuenta_id", estadoId);
+
   revalidatePath("/tarjetas");
+  revalidatePath("/obligaciones");
 }
 
 /**
@@ -132,11 +167,25 @@ export async function reabrirEstadoCuenta(estadoId: string) {
  */
 export async function marcarEstadoPagado(estadoId: string, pagado: boolean) {
   const { supabase, userId } = await getFamiliaId();
-  const { error } = await supabase
+  const { data: estado, error } = await supabase
     .from("estados_cuenta")
     .update({ pagado, fecha_pagado: pagado ? new Date().toISOString() : null, updated_by: userId })
-    .eq("id", estadoId);
+    .eq("id", estadoId)
+    .select("saldo_final")
+    .single();
 
   if (error) throw new Error(error.message);
+
+  await supabase
+    .from("obligaciones")
+    .update({
+      estado: pagado ? "pagada" : "pendiente",
+      fecha_pago: pagado ? format(new Date(), "yyyy-MM-dd") : null,
+      monto_pagado: pagado ? estado.saldo_final : null,
+      updated_by: userId,
+    })
+    .eq("estado_cuenta_id", estadoId);
+
   revalidatePath("/tarjetas");
+  revalidatePath("/obligaciones");
 }

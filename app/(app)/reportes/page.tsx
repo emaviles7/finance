@@ -63,10 +63,39 @@ export default async function ReportesPage({
     .maybeSingle();
   const familiaId = miembro?.familia_id;
 
-  const [{ data: cuentasOptions }, { data: lineasOptions }] = await Promise.all([
+  const [{ data: cuentasOptions }, { data: lineasOptions }, { data: obligaciones }] = await Promise.all([
     supabase.from("cuentas").select("id, nombre").eq("familia_id", familiaId).eq("activa", true),
     supabase.from("lineas_presupuestarias").select("id, nombre").eq("familia_id", familiaId).eq("activa", true),
+    supabase
+      .from("obligaciones")
+      .select("tipo, estado, monto_total, monto_pagado")
+      .eq("familia_id", familiaId)
+      .eq("activa", true),
   ]);
+
+  const TIPO_OBLIGACION_LABEL: Record<string, string> = {
+    tarjeta_credito: "Tarjeta de crédito",
+    tarjeta_debito: "Tarjeta de débito",
+    prestamo_terceros: "Préstamo de terceros",
+    prestamo_personal: "Préstamo personal",
+    adelanto_efectivo: "Adelanto de efectivo",
+    otro: "Otro",
+  };
+  const porTipoObligacionMap = new Map<string, { pendiente: number; pagada: number }>();
+  for (const o of obligaciones ?? []) {
+    const acc = porTipoObligacionMap.get(o.tipo) ?? { pendiente: 0, pagada: 0 };
+    if (o.estado === "pagada") acc.pagada += Number(o.monto_pagado ?? o.monto_total ?? 0);
+    else acc.pendiente += Number(o.monto_total ?? 0);
+    porTipoObligacionMap.set(o.tipo, acc);
+  }
+  const porTipoObligacion = Array.from(porTipoObligacionMap.entries()).map(([tipo, v]) => ({
+    tipo: TIPO_OBLIGACION_LABEL[tipo] ?? tipo,
+    pendiente: v.pendiente,
+    pagada: v.pagada,
+  }));
+
+  const idPorCuenta = new Map((cuentasOptions ?? []).map((c) => [c.nombre, c.id]));
+  const idPorLinea = new Map((lineasOptions ?? []).map((l) => [l.nombre, l.id]));
 
   let query = supabase
     .from("transacciones")
@@ -189,6 +218,7 @@ export default async function ReportesPage({
           <TabsTrigger value="linea">Por línea</TabsTrigger>
           <TabsTrigger value="cuenta">Por cuenta</TabsTrigger>
           <TabsTrigger value="detalle">Detalle</TabsTrigger>
+          <TabsTrigger value="obligaciones">Obligaciones</TabsTrigger>
         </TabsList>
 
         <TabsContent value="categoria" className="space-y-3 pt-3">
@@ -255,7 +285,15 @@ export default async function ReportesPage({
                 ) : (
                   porLinea.map((r) => (
                     <TableRow key={r.linea}>
-                      <TableCell>{r.linea}</TableCell>
+                      <TableCell>
+                        {idPorLinea.has(r.linea) ? (
+                          <Link href={`/presupuestos/${idPorLinea.get(r.linea)}`} className="hover:underline">
+                            {r.linea}
+                          </Link>
+                        ) : (
+                          r.linea
+                        )}
+                      </TableCell>
                       <TableCell className="text-mono-amount">{formatCurrency(r.presupuestado)}</TableCell>
                       <TableCell className="text-mono-amount text-accent-danger">
                         {formatCurrency(r.gastado)}
@@ -300,7 +338,15 @@ export default async function ReportesPage({
                 ) : (
                   porCuenta.map((r) => (
                     <TableRow key={r.cuenta}>
-                      <TableCell>{r.cuenta}</TableCell>
+                      <TableCell>
+                        {idPorCuenta.has(r.cuenta) ? (
+                          <Link href={`/cuentas/${idPorCuenta.get(r.cuenta)}`} className="hover:underline">
+                            {r.cuenta}
+                          </Link>
+                        ) : (
+                          r.cuenta
+                        )}
+                      </TableCell>
                       <TableCell className="text-mono-amount text-accent-success">
                         {formatCurrency(r.ingresos)}
                       </TableCell>
@@ -378,6 +424,47 @@ export default async function ReportesPage({
                       </TableCell>
                       <TableCell className="max-w-48 truncate text-xs italic text-muted-foreground" title={f.notas ?? ""}>
                         {f.notas || "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="obligaciones" className="space-y-3 pt-3">
+          <div className="flex justify-end">
+            <ExportButtons filename={`reporte-obligaciones-${anio}-${mes}`} rows={porTipoObligacion} />
+          </div>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Pendiente</TableHead>
+                  <TableHead>Pagado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {porTipoObligacion.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                      Sin obligaciones registradas.{" "}
+                      <Link href="/obligaciones" className="underline">
+                        Crear una
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  porTipoObligacion.map((r) => (
+                    <TableRow key={r.tipo}>
+                      <TableCell>{r.tipo}</TableCell>
+                      <TableCell className="text-mono-amount text-accent-warning">
+                        {formatCurrency(r.pendiente)}
+                      </TableCell>
+                      <TableCell className="text-mono-amount text-accent-success">
+                        {formatCurrency(r.pagada)}
                       </TableCell>
                     </TableRow>
                   ))

@@ -4,9 +4,20 @@ import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { TransactionTable, type TransaccionRow } from "@/components/transactions/TransactionTable";
 import { AuditTrail } from "@/components/shared/AuditTrail";
+import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon } from "lucide-react";
+import { formatCurrency } from "@/lib/utils/currency";
+import { formatDate } from "@/lib/utils/dates";
 
 function unwrap<T>(rel: unknown): T | null {
   if (!rel) return null;
@@ -41,7 +52,7 @@ export default async function LineaDetallePage({
 
   const hoy = new Date();
 
-  const [{ data: cuentas }, { data: lineas }, { data: resumenMes }, { data: transacciones }] =
+  const [{ data: cuentas }, { data: lineas }, { data: resumenMes }, { data: transacciones }, { data: transferenciasLinea }] =
     await Promise.all([
       supabase.from("cuentas").select("id, nombre").eq("familia_id", familiaId).eq("activa", true),
       supabase
@@ -66,6 +77,12 @@ export default async function LineaDetallePage({
         )
         .eq("linea_id", lineaId)
         .order("fecha", { ascending: false }),
+      supabase
+        .from("v_historial_linea")
+        .select("fecha, descripcion, tipo, delta, created_at")
+        .eq("linea_id", lineaId)
+        .in("tipo", ["transferencia_linea_salida", "transferencia_linea_entrada"])
+        .order("created_at", { ascending: false }),
     ]);
 
   const lineasOptions = (lineas ?? []).map((l) => ({
@@ -122,7 +139,15 @@ export default async function LineaDetallePage({
             </div>
           </div>
         </div>
-        <AuditTrail tabla="lineas_presupuestarias" registroId={linea.id} />
+        <div className="flex items-center gap-2">
+          <TransferenciaLineaDialog
+            lineas={lineasOptions.map((l) => ({ id: l.id, nombre: l.nombre, categoriaNombre: l.categoria_nombre }))}
+            anio={hoy.getFullYear()}
+            mes={hoy.getMonth() + 1}
+            defaultOrigenId={linea.id}
+          />
+          <AuditTrail tabla="lineas_presupuestarias" registroId={linea.id} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -140,6 +165,43 @@ export default async function LineaDetallePage({
           </CardContent>
         </Card>
       </div>
+
+      {(transferenciasLinea ?? []).length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Transferencias entre líneas</h2>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Monto</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(transferenciasLinea ?? []).map((t, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{formatDate(t.fecha)}</TableCell>
+                    <TableCell>{t.descripcion}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {t.tipo === "transferencia_linea_entrada" ? "Recibida" : "Enviada"}
+                    </TableCell>
+                    <TableCell
+                      className={
+                        "text-mono-amount " + (Number(t.delta) >= 0 ? "text-accent-success" : "text-accent-danger")
+                      }
+                    >
+                      {Number(t.delta) >= 0 ? "+" : ""}
+                      {formatCurrency(Number(t.delta))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Historial de transacciones</h2>
