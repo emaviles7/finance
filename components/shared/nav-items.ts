@@ -1,29 +1,17 @@
 import {
-  LayoutDashboard,
+  BookText,
   ArrowLeftRight,
-  Wallet,
   PiggyBank,
-  CreditCard,
-  TrendingUp,
-  Target,
-  FileBarChart,
-  Wand2,
-  Trash2,
   Settings,
-  HandCoins,
 } from "lucide-react";
 
+// Rediseño MVP: la app gira alrededor de 3 páginas núcleo + Configuración.
+// Los módulos avanzados (dashboard, tarjetas, obligaciones, ahorro, cash-flow,
+// reportes, reglas, cuentas, papelera) siguen existiendo y son accesibles por
+// URL directa; solo se ocultan del menú hasta estabilizar el flujo principal.
 export const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/cuenta-madre", label: "Cuenta Madre", icon: BookText },
   { href: "/transacciones", label: "Transacciones", icon: ArrowLeftRight },
-  { href: "/cuentas", label: "Cuentas", icon: Wallet },
   { href: "/presupuestos", label: "Presupuestos", icon: PiggyBank },
-  { href: "/tarjetas", label: "Tarjetas", icon: CreditCard },
-  { href: "/obligaciones", label: "Obligaciones", icon: HandCoins },
-  { href: "/cash-flow", label: "Cash Flow", icon: TrendingUp },
-  { href: "/ahorro", label: "Ahorro", icon: Target },
-  { href: "/reportes", label: "Reportes", icon: FileBarChart },
-  { href: "/reglas", label: "Reglas", icon: Wand2 },
-  { href: "/papelera", label: "Papelera", icon: Trash2 },
   { href: "/configuracion", label: "Configuración", icon: Settings },
 ];

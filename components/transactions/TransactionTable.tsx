@@ -50,7 +50,7 @@ import { formatDate } from "@/lib/utils/dates";
 import { eliminarTransaccion, restaurarTransaccion } from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 import { TransactionSheet } from "./TransactionSheet";
-import { type LineaOption, type CuentaOption } from "./TransactionForm";
+import { type LineaOption, type MetodoPagoOption } from "./TransactionForm";
 
 export type TransaccionRow = {
   id: string;
@@ -60,22 +60,22 @@ export type TransaccionRow = {
   monto: number;
   tipo: "ingreso" | "egreso" | "transferencia" | "transferencia_externa";
   notas: string | null;
-  cuenta_origen_id: string | null;
-  cuenta_destino_id: string | null;
   destinatario_externo: string | null;
   linea_id: string | null;
-  cuenta_origen_nombre: string | null;
-  cuenta_destino_nombre: string | null;
   linea_nombre: string | null;
   categoria_nombre: string | null;
+  metodo_pago_id: string | null;
+  metodo_pago_nombre: string | null;
+  pagado: boolean;
+  fecha_pagado: string | null;
   es_ajuste_saldo: boolean;
 };
 
 interface TransactionTableProps {
   data: TransaccionRow[];
-  cuentas: CuentaOption[];
+  metodosPago: MetodoPagoOption[];
   lineas: LineaOption[];
-  beneficiarios?: string[];
+  cuentaMadreId: string;
 }
 
 const TIPO_BADGE: Record<TransaccionRow["tipo"], { label: string; className: string }> = {
@@ -88,17 +88,17 @@ const TIPO_BADGE: Record<TransaccionRow["tipo"], { label: string; className: str
 const FILTROS_INICIALES = {
   search: "",
   tipoFiltro: "todos",
-  cuentaFiltro: "todas",
+  metodoFiltro: "todos",
   lineaFiltro: "todas",
   fechaInicio: "",
   fechaFin: "",
 };
 
-export function TransactionTable({ data, cuentas, lineas, beneficiarios }: TransactionTableProps) {
+export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: TransactionTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState(FILTROS_INICIALES.search);
   const [tipoFiltro, setTipoFiltro] = useState<string>(FILTROS_INICIALES.tipoFiltro);
-  const [cuentaFiltro, setCuentaFiltro] = useState<string>(FILTROS_INICIALES.cuentaFiltro);
+  const [metodoFiltro, setMetodoFiltro] = useState<string>(FILTROS_INICIALES.metodoFiltro);
   const [lineaFiltro, setLineaFiltro] = useState<string>(FILTROS_INICIALES.lineaFiltro);
   const [fechaInicio, setFechaInicio] = useState(FILTROS_INICIALES.fechaInicio);
   const [fechaFin, setFechaFin] = useState(FILTROS_INICIALES.fechaFin);
@@ -109,7 +109,7 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
   const hayFiltrosActivos =
     search !== "" ||
     tipoFiltro !== "todos" ||
-    cuentaFiltro !== "todas" ||
+    metodoFiltro !== "todos" ||
     lineaFiltro !== "todas" ||
     fechaInicio !== "" ||
     fechaFin !== "";
@@ -117,7 +117,7 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
   function limpiarFiltros() {
     setSearch(FILTROS_INICIALES.search);
     setTipoFiltro(FILTROS_INICIALES.tipoFiltro);
-    setCuentaFiltro(FILTROS_INICIALES.cuentaFiltro);
+    setMetodoFiltro(FILTROS_INICIALES.metodoFiltro);
     setLineaFiltro(FILTROS_INICIALES.lineaFiltro);
     setFechaInicio(FILTROS_INICIALES.fechaInicio);
     setFechaFin(FILTROS_INICIALES.fechaFin);
@@ -126,7 +126,7 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
   const filtered = useMemo(() => {
     const resultado = data.filter((t) => {
       if (tipoFiltro !== "todos" && t.tipo !== tipoFiltro) return false;
-      if (cuentaFiltro !== "todas" && t.cuenta_origen_id !== cuentaFiltro) return false;
+      if (metodoFiltro !== "todos" && t.metodo_pago_id !== metodoFiltro) return false;
       if (lineaFiltro !== "todas" && t.linea_id !== lineaFiltro) return false;
       if (fechaInicio && t.fecha < fechaInicio) return false;
       if (fechaFin && t.fecha > fechaFin) return false;
@@ -145,7 +145,7 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
     return resultado.sort((a, b) =>
       orden === "desc" ? b.fecha.localeCompare(a.fecha) : a.fecha.localeCompare(b.fecha)
     );
-  }, [data, search, tipoFiltro, cuentaFiltro, lineaFiltro, fechaInicio, fechaFin, orden]);
+  }, [data, search, tipoFiltro, metodoFiltro, lineaFiltro, fechaInicio, fechaFin, orden]);
 
   const columns = useMemo<ColumnDef<TransaccionRow>[]>(
     () => [
@@ -173,46 +173,27 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
         ),
       },
       {
-        accessorKey: "linea_nombre",
-        header: "Categoría / Línea",
+        accessorKey: "metodo_pago_nombre",
+        header: "Método de pago",
         cell: ({ row }) =>
-          row.original.tipo === "transferencia" ? (
-            <span className="text-xs text-muted-foreground">
-              {row.original.cuenta_origen_nombre} → {row.original.cuenta_destino_nombre}
-            </span>
-          ) : row.original.tipo === "transferencia_externa" ? (
-            <div className="text-sm">
-              <p>→ {row.original.destinatario_externo}</p>
-              {row.original.linea_nombre && (
-                <p className="text-xs text-muted-foreground">
-                  {row.original.categoria_nombre} · {row.original.linea_nombre}
-                </p>
-              )}
-            </div>
-          ) : row.original.linea_nombre ? (
+          row.original.metodo_pago_nombre ? (
+            <span className="text-sm">{row.original.metodo_pago_nombre}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          ),
+      },
+      {
+        accessorKey: "linea_nombre",
+        header: "Línea presupuestaria",
+        cell: ({ row }) =>
+          row.original.linea_nombre ? (
             <div className="text-sm">
               <p>{row.original.linea_nombre}</p>
               <p className="text-xs text-muted-foreground">{row.original.categoria_nombre}</p>
             </div>
           ) : (
-            <span className="text-xs text-muted-foreground">Sin categoría</span>
+            <span className="text-xs text-muted-foreground">Sin línea</span>
           ),
-      },
-      {
-        accessorKey: "cuenta_origen_nombre",
-        header: "Cuenta",
-        cell: ({ row }) => row.original.cuenta_origen_nombre ?? "—",
-      },
-      {
-        accessorKey: "tipo",
-        header: "Tipo",
-        cell: ({ row }) => {
-          if (row.original.es_ajuste_saldo) {
-            return <Badge className="bg-muted text-muted-foreground">Ajuste de saldo</Badge>;
-          }
-          const meta = TIPO_BADGE[row.original.tipo];
-          return <Badge className={meta.className}>{meta.label}</Badge>;
-        },
       },
       {
         accessorKey: "monto",
@@ -238,6 +219,21 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
         ),
       },
       {
+        accessorKey: "pagado",
+        header: "Estado",
+        cell: ({ row }) =>
+          row.original.pagado ? (
+            <div className="text-sm">
+              <Badge className="bg-accent-success/15 text-accent-success">Pagado</Badge>
+              {row.original.fecha_pagado && (
+                <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(row.original.fecha_pagado)}</p>
+              )}
+            </div>
+          ) : (
+            <Badge className="bg-accent-warning/15 text-accent-warning">Pendiente</Badge>
+          ),
+      },
+      {
         id: "acciones",
         header: "",
         cell: ({ row }) => (
@@ -245,19 +241,19 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
             <TransactionSheet
               mode="edit"
               transaccionId={row.original.id}
-              cuentas={cuentas}
+              metodosPago={metodosPago}
               lineas={lineas}
-              beneficiarios={beneficiarios}
+              cuentaMadreId={cuentaMadreId}
               defaultValues={{
                 fecha: row.original.fecha,
                 descripcion: row.original.descripcion,
                 comercio: row.original.comercio ?? "",
                 monto: row.original.monto,
-                tipo: row.original.tipo,
-                cuenta_origen_id: row.original.cuenta_origen_id ?? "",
-                cuenta_destino_id: row.original.cuenta_destino_id ?? "",
-                destinatario_externo: row.original.destinatario_externo ?? "",
+                tipo: row.original.tipo === "ingreso" ? "ingreso" : "egreso",
                 linea_id: row.original.linea_id ?? "",
+                metodo_pago_id: row.original.metodo_pago_id ?? "",
+                pagado: row.original.pagado,
+                fecha_pagado: row.original.fecha_pagado ?? "",
                 notas: row.original.notas ?? "",
               }}
               trigger={
@@ -273,7 +269,7 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
         ),
       },
     ],
-    [cuentas, lineas]
+    [metodosPago, lineas, cuentaMadreId]
   );
 
   const table = useReactTable({
@@ -306,7 +302,7 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Buscar por descripción o comercio..."
+          placeholder="Buscar por descripción o destinatario..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
@@ -321,21 +317,19 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
             <SelectItem value="todos">Todos los tipos</SelectItem>
             <SelectItem value="ingreso">Ingreso</SelectItem>
             <SelectItem value="egreso">Egreso</SelectItem>
-            <SelectItem value="transferencia">Transferencia Interna</SelectItem>
-            <SelectItem value="transferencia_externa">Transferencia Externa</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={cuentaFiltro} onValueChange={(v) => setCuentaFiltro(v ?? "todas")}>
+        <Select value={metodoFiltro} onValueChange={(v) => setMetodoFiltro(v ?? "todos")}>
           <SelectTrigger>
-            <SelectValue placeholder="Cuenta">
-              {(v: string) => cuentas.find((c) => c.id === v)?.nombre ?? "Todas las cuentas"}
+            <SelectValue placeholder="Método de pago">
+              {(v: string) => metodosPago.find((m) => m.id === v)?.nombre ?? "Todos los métodos"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todas">Todas las cuentas</SelectItem>
-            {cuentas.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.nombre}
+            <SelectItem value="todos">Todos los métodos</SelectItem>
+            {metodosPago.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.nombre}
               </SelectItem>
             ))}
           </SelectContent>
@@ -453,7 +447,7 @@ export function TransactionTable({ data, cuentas, lineas, beneficiarios }: Trans
             <DialogTitle>Eliminar transacción</DialogTitle>
             <DialogDescription>
               Podrás deshacer esta acción desde el aviso que aparece después de eliminar. El saldo de
-              la cuenta se recalculará.
+              la Cuenta Madre se recalculará.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

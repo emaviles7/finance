@@ -39,7 +39,7 @@ export default function OnboardingPage() {
     }
 
     setLoading(false);
-    router.push("/dashboard");
+    router.push("/cuenta-madre");
     router.refresh();
   }
 

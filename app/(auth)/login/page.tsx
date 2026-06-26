@@ -29,7 +29,7 @@ export default function LoginPage() {
       setError(error.message);
       return;
     }
-    router.push("/dashboard");
+    router.push("/cuenta-madre");
     router.refresh();
   }
 

@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TransactionTable, type TransaccionRow } from "@/components/transactions/TransactionTable";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
-import { ImportWizard } from "@/components/import/ImportWizard";
+import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default async function TransaccionesPage() {
   const supabase = await createClient();
@@ -15,56 +18,58 @@ export default async function TransaccionesPage() {
     .maybeSingle();
 
   const familiaId = miembro?.familia_id;
+  const hoy = new Date();
 
-  const [{ data: cuentas }, { data: lineas }, { data: transacciones }, { data: beneficiarios }] = await Promise.all([
-    supabase
-      .from("cuentas")
-      .select("id, nombre")
-      .eq("familia_id", familiaId)
-      .eq("activa", true)
-      .order("orden"),
-    supabase
-      .from("lineas_presupuestarias")
-      .select("id, nombre, categoria_id, categorias(nombre, es_ingreso)")
-      .eq("familia_id", familiaId)
-      .eq("activa", true)
-      .order("orden"),
-    supabase
-      .from("transacciones")
-      .select(
-        `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
-         cuenta_origen_id, cuenta_destino_id, linea_id,
-         cuenta_origen:cuentas!transacciones_cuenta_origen_id_fkey(nombre),
-         cuenta_destino:cuentas!transacciones_cuenta_destino_id_fkey(nombre),
-         linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, categorias(nombre))`
-      )
-      .eq("familia_id", familiaId)
-      .order("fecha", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(200),
-    supabase.from("beneficiarios_frecuentes").select("nombre").eq("familia_id", familiaId).order("nombre"),
-  ]);
+  const [{ data: cuentaMadre }, { data: metodosPago }, { data: lineas }, { data: transacciones }] =
+    await Promise.all([
+      supabase
+        .from("cuentas")
+        .select("id")
+        .eq("familia_id", familiaId)
+        .eq("es_cuenta_madre", true)
+        .eq("activa", true)
+        .maybeSingle(),
+      supabase
+        .from("metodos_pago")
+        .select("id, nombre")
+        .eq("familia_id", familiaId)
+        .eq("activa", true)
+        .order("orden")
+        .order("nombre"),
+      supabase
+        .from("lineas_presupuestarias")
+        .select("id, nombre, categoria_id, categorias(nombre, es_ingreso)")
+        .eq("familia_id", familiaId)
+        .eq("activa", true)
+        .order("orden"),
+      supabase
+        .from("transacciones")
+        .select(
+          `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
+           linea_id, metodo_pago_id, pagado, fecha_pagado,
+           metodo_pago:metodos_pago(nombre),
+           linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, categorias(nombre))`
+        )
+        .eq("familia_id", familiaId)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
 
-  const beneficiariosOptions = (beneficiarios ?? []).map((b) => b.nombre);
+  const cuentaMadreId = cuentaMadre?.id ?? "";
 
   function unwrap<T>(rel: unknown): T | null {
     if (!rel) return null;
     return (Array.isArray(rel) ? rel[0] : rel) as T;
   }
 
-  const cuentasOptions = cuentas ?? [];
+  const metodosPagoOptions = metodosPago ?? [];
   const lineasOptions = (lineas ?? []).map((l) => ({
     id: l.id,
     nombre: l.nombre,
     categoria_nombre: unwrap<{ nombre: string }>(l.categorias)?.nombre ?? "Sin categoría",
     es_ingreso: unwrap<{ es_ingreso: boolean }>(l.categorias)?.es_ingreso ?? false,
   }));
-
-  function nombreDe(rel: unknown): string | null {
-    if (!rel) return null;
-    const obj = Array.isArray(rel) ? rel[0] : rel;
-    return (obj as { nombre?: string } | undefined)?.nombre ?? null;
-  }
 
   const rows: TransaccionRow[] = (transacciones ?? []).map((t) => {
     const linea = unwrap<{ nombre: string; categorias: unknown }>(t.linea);
@@ -76,38 +81,59 @@ export default async function TransaccionesPage() {
       monto: Number(t.monto),
       tipo: t.tipo,
       notas: t.notas,
-      cuenta_origen_id: t.cuenta_origen_id,
-      cuenta_destino_id: t.cuenta_destino_id,
       destinatario_externo: t.destinatario_externo,
       linea_id: t.linea_id,
-      cuenta_origen_nombre: nombreDe(t.cuenta_origen),
-      cuenta_destino_nombre: nombreDe(t.cuenta_destino),
       linea_nombre: linea?.nombre ?? null,
       categoria_nombre: linea ? unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? null : null,
+      metodo_pago_id: t.metodo_pago_id,
+      metodo_pago_nombre: unwrap<{ nombre: string }>(t.metodo_pago)?.nombre ?? null,
+      pagado: t.pagado ?? true,
+      fecha_pagado: t.fecha_pagado,
       es_ajuste_saldo: t.es_ajuste_saldo ?? false,
     };
   });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Transacciones</h1>
           <p className="text-sm text-muted-foreground">
             {rows.length} transacciones registradas
           </p>
         </div>
-        <div className="flex gap-2">
-          <ImportWizard cuentas={cuentasOptions} />
-          <TransactionSheet cuentas={cuentasOptions} lineas={lineasOptions} beneficiarios={beneficiariosOptions} />
+        <div className="flex flex-wrap gap-2">
+          <TransferenciaLineaDialog
+            lineas={lineasOptions.map((l) => ({ id: l.id, nombre: l.nombre, categoriaNombre: l.categoria_nombre }))}
+            anio={hoy.getFullYear()}
+            mes={hoy.getMonth() + 1}
+          />
+          {cuentaMadreId && (
+            <TransactionSheet
+              metodosPago={metodosPagoOptions}
+              lineas={lineasOptions}
+              cuentaMadreId={cuentaMadreId}
+            />
+          )}
         </div>
       </div>
 
+      {!cuentaMadreId && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-muted-foreground">
+            <span>Designa una Cuenta Madre para poder registrar transacciones.</span>
+            <Link href="/cuentas">
+              <Button size="sm">Ir a Cuentas</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       <TransactionTable
         data={rows}
-        cuentas={cuentasOptions}
+        metodosPago={metodosPagoOptions}
         lineas={lineasOptions}
-        beneficiarios={beneficiariosOptions}
+        cuentaMadreId={cuentaMadreId}
       />
     </div>
   );

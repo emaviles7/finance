@@ -12,15 +12,15 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
-import { TransactionForm, type LineaOption, type CuentaOption } from "./TransactionForm";
+import { TransactionForm, type LineaOption, type MetodoPagoOption } from "./TransactionForm";
 import type { TransaccionInput, TransaccionFormInput } from "@/lib/validations/transaction.schema";
 import { crearTransaccion, actualizarTransaccion, eliminarTransaccion, restaurarTransaccion } from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 
 interface TransactionSheetProps {
-  cuentas: CuentaOption[];
+  metodosPago: MetodoPagoOption[];
   lineas: LineaOption[];
-  beneficiarios?: string[];
+  cuentaMadreId: string;
   mode?: "create" | "edit";
   transaccionId?: string;
   defaultValues?: Partial<TransaccionFormInput>;
@@ -28,9 +28,9 @@ interface TransactionSheetProps {
 }
 
 export function TransactionSheet({
-  cuentas,
+  metodosPago,
   lineas,
-  beneficiarios,
+  cuentaMadreId,
   mode = "create",
   transaccionId,
   defaultValues,
@@ -83,9 +83,9 @@ export function TransactionSheet({
           <SheetTitle>{mode === "edit" ? "Editar transacción" : "Nueva transacción"}</SheetTitle>
         </SheetHeader>
         <TransactionForm
-          cuentas={cuentas}
+          metodosPago={metodosPago}
           lineas={lineas}
-          beneficiarios={beneficiarios}
+          cuentaMadreId={cuentaMadreId}
           defaultValues={defaultValues}
           submitting={submitting}
           onSubmit={handleSubmit}

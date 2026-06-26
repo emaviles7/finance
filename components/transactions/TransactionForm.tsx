@@ -23,18 +23,19 @@ import { todayISO } from "@/lib/utils/dates";
 
 export type CuentaOption = { id: string; nombre: string };
 export type LineaOption = { id: string; nombre: string; categoria_nombre: string; es_ingreso: boolean };
+export type MetodoPagoOption = { id: string; nombre: string };
 
 const TIPO_LABELS: Record<string, string> = {
   egreso: "Egreso",
   ingreso: "Ingreso",
-  transferencia: "Transferencia Interna",
-  transferencia_externa: "Transferencia Externa",
 };
 
 interface TransactionFormProps {
-  cuentas: CuentaOption[];
+  /** Lista de métodos de pago (etiquetas) administrada por el usuario. */
+  metodosPago: MetodoPagoOption[];
   lineas: LineaOption[];
-  beneficiarios?: string[];
+  /** Cuenta Madre: todas las transacciones se contabilizan contra ella (bolsa única). */
+  cuentaMadreId: string;
   defaultValues?: Partial<TransaccionFormInput>;
   submitting?: boolean;
   onSubmit: (values: TransaccionInput) => Promise<void>;
@@ -42,9 +43,9 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({
-  cuentas,
+  metodosPago,
   lineas,
-  beneficiarios = [],
+  cuentaMadreId,
   defaultValues,
   submitting,
   onSubmit,
@@ -64,10 +65,13 @@ export function TransactionForm({
       comercio: "",
       monto: 0,
       tipo: "egreso",
-      cuenta_origen_id: "",
+      cuenta_origen_id: cuentaMadreId,
       cuenta_destino_id: "",
       destinatario_externo: "",
       linea_id: "",
+      metodo_pago_id: "",
+      pagado: true,
+      fecha_pagado: "",
       guardarBeneficiario: false,
       notas: "",
       ...defaultValues,
@@ -75,6 +79,7 @@ export function TransactionForm({
   });
 
   const tipo = watch("tipo");
+  const pagado = watch("pagado");
 
   const gruposLineas = new Map<string, LineaOption[]>();
   for (const l of lineas.filter((l) => l.es_ingreso === (tipo === "ingreso"))) {
@@ -86,6 +91,10 @@ export function TransactionForm({
       className="flex flex-1 flex-col gap-4 overflow-y-auto p-4"
       onSubmit={handleSubmit(onSubmit)}
     >
+      {/* La Cuenta Madre se contabiliza siempre (bolsa única); su id se
+          siembra en defaultValues y se mantiene oculto en el formulario. */}
+      <input type="hidden" {...register("cuenta_origen_id")} />
+
       <div className="space-y-2">
         <Label>Tipo</Label>
         <Controller
@@ -101,8 +110,6 @@ export function TransactionForm({
               <SelectContent>
                 <SelectItem value="egreso">Egreso</SelectItem>
                 <SelectItem value="ingreso">Ingreso</SelectItem>
-                <SelectItem value="transferencia">Transferencia Interna</SelectItem>
-                <SelectItem value="transferencia_externa">Transferencia Externa</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -131,138 +138,92 @@ export function TransactionForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="comercio">Comercio (opcional)</Label>
-        <Input id="comercio" {...register("comercio")} />
+        <Label htmlFor="comercio">Destinatario / Origen (opcional)</Label>
+        <Input
+          id="comercio"
+          placeholder={tipo === "ingreso" ? "¿De quién proviene?" : "¿A quién se envió?"}
+          {...register("comercio")}
+        />
       </div>
 
       <div className="space-y-2">
-        <Label>{tipo === "transferencia" || tipo === "transferencia_externa" ? "Cuenta origen" : "Cuenta"}</Label>
+        <Label>Método de pago</Label>
         <Controller
           control={control}
-          name="cuenta_origen_id"
+          name="metodo_pago_id"
           render={({ field }) => (
-            <Select value={field.value} onValueChange={field.onChange}>
+            <Select value={field.value ?? ""} onValueChange={field.onChange}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona una cuenta">
-                  {(v: string) => cuentas.find((c) => c.id === v)?.nombre || "Selecciona una cuenta"}
+                <SelectValue placeholder="Selecciona un método de pago">
+                  {(v: string) => metodosPago.find((m) => m.id === v)?.nombre || "Selecciona un método de pago"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {cuentas.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nombre}
+                {metodosPago.length === 0 ? (
+                  <SelectItem value="" disabled>
+                    Crea métodos de pago en Configuración
                   </SelectItem>
+                ) : (
+                  metodosPago.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.nombre}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Línea presupuestaria</Label>
+        <Controller
+          control={control}
+          name="linea_id"
+          render={({ field }) => (
+            <Select value={field.value ?? ""} onValueChange={field.onChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Auto (motor de reglas) si se deja vacío">
+                  {(v: string) =>
+                    lineas.find((l) => l.id === v)?.nombre || "Auto (motor de reglas) si se deja vacío"
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from(gruposLineas.entries()).map(([categoriaNombre, lineasDeCategoria]) => (
+                  <SelectGroup key={categoriaNombre}>
+                    <SelectLabel>{categoriaNombre}</SelectLabel>
+                    {lineasDeCategoria.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
           )}
         />
-        {errors.cuenta_origen_id && (
-          <p className="text-xs text-destructive">{errors.cuenta_origen_id.message}</p>
-        )}
+        {errors.linea_id && <p className="text-xs text-destructive">{errors.linea_id.message}</p>}
       </div>
 
-      {tipo === "transferencia" && (
-        <div className="space-y-2">
-          <Label>Cuenta destino</Label>
-          <Controller
-            control={control}
-            name="cuenta_destino_id"
-            render={({ field }) => (
-              <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona una cuenta">
-                    {(v: string) => cuentas.find((c) => c.id === v)?.nombre || "Selecciona una cuenta"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {cuentas.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          {errors.cuenta_destino_id && (
-            <p className="text-xs text-destructive">{errors.cuenta_destino_id.message}</p>
-          )}
-        </div>
-      )}
-
-      {tipo === "transferencia_externa" && (
-        <div className="space-y-2">
-          <Label htmlFor="destinatario_externo">Destinatario</Label>
-          <Input
-            id="destinatario_externo"
-            list="beneficiarios-frecuentes"
-            placeholder="Ej. Super Selectos, Juan Pérez, CAESS..."
-            {...register("destinatario_externo")}
-          />
-          <datalist id="beneficiarios-frecuentes">
-            {beneficiarios.map((b) => (
-              <option key={b} value={b} />
-            ))}
-          </datalist>
-          {errors.destinatario_externo && (
-            <p className="text-xs text-destructive">{errors.destinatario_externo.message}</p>
-          )}
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input type="checkbox" className="size-4" {...register("guardarBeneficiario")} />
-            Guardar como beneficiario frecuente
-          </label>
-        </div>
-      )}
-
-      {tipo !== "transferencia" && (
-        <div className="space-y-2">
-          <Label>
-            Línea presupuestaria{tipo === "transferencia_externa" && <span className="text-destructive"> *</span>}
-          </Label>
-          <Controller
-            control={control}
-            name="linea_id"
-            render={({ field }) => (
-              <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue
-                    placeholder={
-                      tipo === "transferencia_externa"
-                        ? "Selecciona la línea afectada"
-                        : "Auto (motor de reglas) si se deja vacío"
-                    }
-                  >
-                    {(v: string) =>
-                      lineas.find((l) => l.id === v)?.nombre ||
-                      (tipo === "transferencia_externa"
-                        ? "Selecciona la línea afectada"
-                        : "Auto (motor de reglas) si se deja vacío")
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from(gruposLineas.entries()).map(([categoriaNombre, lineasDeCategoria]) => (
-                    <SelectGroup key={categoriaNombre}>
-                      <SelectLabel>{categoriaNombre}</SelectLabel>
-                      {lineasDeCategoria.map((l) => (
-                        <SelectItem key={l.id} value={l.id}>
-                          {l.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          {errors.linea_id && <p className="text-xs text-destructive">{errors.linea_id.message}</p>}
-        </div>
-      )}
-
       <div className="space-y-2">
-        <Label htmlFor="notas">Notas (opcional)</Label>
+        <Label htmlFor="notas">Nota (opcional)</Label>
         <Input id="notas" {...register("notas")} />
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="size-4" {...register("pagado")} />
+          Pagado
+        </label>
+        {pagado && (
+          <div className="space-y-2">
+            <Label htmlFor="fecha_pagado">Fecha de pago (opcional)</Label>
+            <Input id="fecha_pagado" type="date" {...register("fecha_pagado")} />
+          </div>
+        )}
       </div>
 
       <div className="mt-auto flex justify-end gap-2 pt-2">

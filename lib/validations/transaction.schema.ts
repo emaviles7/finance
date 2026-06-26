@@ -14,10 +14,15 @@ export const transaccionSchema = z
     comercio: z.string().max(100).optional().or(z.literal("")),
     monto: z.coerce.number().positive("El monto debe ser mayor a 0"),
     tipo: transaccionTipoSchema,
+    // En el flujo MVP de "bolsa única" lo provee el formulario/servidor con la
+    // Cuenta Madre; se mantiene requerido para conservar la integridad del ledger.
     cuenta_origen_id: z.string().uuid("Selecciona una cuenta"),
     cuenta_destino_id: z.string().uuid().optional().or(z.literal("")),
     destinatario_externo: z.string().max(150).optional().or(z.literal("")),
     linea_id: z.string().uuid().optional().or(z.literal("")),
+    metodo_pago_id: z.string().uuid().optional().or(z.literal("")),
+    pagado: z.boolean().optional().default(true),
+    fecha_pagado: z.string().optional().or(z.literal("")),
     guardarBeneficiario: z.boolean().optional(),
     notas: z.string().optional().or(z.literal("")),
   })

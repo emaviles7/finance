@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/dashboard/KPICard";
-import { TransactionTable, type TransaccionRow } from "@/components/transactions/TransactionTable";
 import { AuditTrail } from "@/components/shared/AuditTrail";
 import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,11 +17,22 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/dates";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 function unwrap<T>(rel: unknown): T | null {
   if (!rel) return null;
   return (Array.isArray(rel) ? rel[0] : rel) as T;
 }
+
+type LedgerRow = {
+  fecha: string;
+  descripcion: string;
+  delta: number;
+  // 0 = asignación de presupuesto (primero del mes), 1 = movimiento
+  orden: number;
+  createdAt: string;
+};
 
 export default async function LineaDetallePage({
   params,
@@ -52,75 +62,91 @@ export default async function LineaDetallePage({
 
   const hoy = new Date();
 
-  const [{ data: cuentas }, { data: lineas }, { data: resumenMes }, { data: transacciones }, { data: transferenciasLinea }] =
-    await Promise.all([
-      supabase.from("cuentas").select("id, nombre").eq("familia_id", familiaId).eq("activa", true),
-      supabase
-        .from("lineas_presupuestarias")
-        .select("id, nombre, categoria_id, categorias(nombre, es_ingreso)")
-        .eq("familia_id", familiaId)
-        .eq("activa", true),
-      supabase
-        .from("v_presupuesto_mes")
-        .select("presupuestado, total_gastado, num_movimientos")
-        .eq("linea_id", lineaId)
-        .eq("anio", hoy.getFullYear())
-        .eq("mes", hoy.getMonth() + 1)
-        .maybeSingle(),
-      supabase
-        .from("transacciones")
-        .select(
-          `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
-           cuenta_origen_id, cuenta_destino_id, linea_id,
-           cuenta_origen:cuentas!transacciones_cuenta_origen_id_fkey(nombre),
-           cuenta_destino:cuentas!transacciones_cuenta_destino_id_fkey(nombre)`
-        )
-        .eq("linea_id", lineaId)
-        .order("fecha", { ascending: false }),
-      supabase
-        .from("v_historial_linea")
-        .select("fecha, descripcion, tipo, delta, created_at")
-        .eq("linea_id", lineaId)
-        .in("tipo", ["transferencia_linea_salida", "transferencia_linea_entrada"])
-        .order("created_at", { ascending: false }),
-    ]);
+  const [{ data: lineas }, { data: presupuestos }, { data: historial }] = await Promise.all([
+    supabase
+      .from("lineas_presupuestarias")
+      .select("id, nombre, categorias(nombre)")
+      .eq("familia_id", familiaId)
+      .eq("activa", true),
+    // Presupuesto NETO por mes (ya incluye ajustes de transferencias por diseño de fn_transferir_linea).
+    supabase
+      .from("presupuestos")
+      .select("anio, mes, monto_presupuestado")
+      .eq("linea_id", lineaId)
+      .is("deleted_at", null),
+    // Egresos + transferencias entre líneas (entrada/salida), con delta ya firmado.
+    supabase
+      .from("v_historial_linea")
+      .select("fecha, descripcion, tipo, delta, created_at")
+      .eq("linea_id", lineaId),
+  ]);
+
+  const categoriaNombre = unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? "Sin categoría";
 
   const lineasOptions = (lineas ?? []).map((l) => ({
     id: l.id,
     nombre: l.nombre,
-    categoria_nombre: unwrap<{ nombre: string }>(l.categorias)?.nombre ?? "Sin categoría",
-    es_ingreso: unwrap<{ es_ingreso: boolean }>(l.categorias)?.es_ingreso ?? false,
+    categoriaNombre: unwrap<{ nombre: string }>(l.categorias)?.nombre ?? "Sin categoría",
   }));
 
-  const categoriaNombre = unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? "Sin categoría";
-  const presupuestado = Number(resumenMes?.presupuestado ?? 0);
-  const gastado = Number(resumenMes?.total_gastado ?? 0);
-  const numMovimientos = Number(resumenMes?.num_movimientos ?? 0);
-
-  function nombreDe(rel: unknown): string | null {
-    if (!rel) return null;
-    const obj = Array.isArray(rel) ? rel[0] : rel;
-    return (obj as { nombre?: string } | undefined)?.nombre ?? null;
+  // Neto presupuestado por mes (clave "anio-mes").
+  const netByMonth = new Map<string, { anio: number; mes: number; neto: number }>();
+  for (const p of presupuestos ?? []) {
+    const key = `${p.anio}-${p.mes}`;
+    netByMonth.set(key, { anio: p.anio, mes: p.mes, neto: Number(p.monto_presupuestado) });
   }
 
-  const rows: TransaccionRow[] = (transacciones ?? []).map((t) => ({
-    id: t.id,
-    fecha: t.fecha,
-    descripcion: t.descripcion,
-    comercio: t.comercio,
-    monto: Number(t.monto),
-    tipo: t.tipo,
-    notas: t.notas,
-    cuenta_origen_id: t.cuenta_origen_id,
-    cuenta_destino_id: t.cuenta_destino_id,
-    destinatario_externo: t.destinatario_externo,
-    linea_id: t.linea_id,
-    cuenta_origen_nombre: nombreDe(t.cuenta_origen),
-    cuenta_destino_nombre: nombreDe(t.cuenta_destino),
-    linea_nombre: linea.nombre,
-    categoria_nombre: categoriaNombre,
-    es_ajuste_saldo: t.es_ajuste_saldo ?? false,
-  }));
+  // Transferencias netas por mes (entrada - salida) a partir del historial.
+  const transferNetByMonth = new Map<string, number>();
+  const movimientos: LedgerRow[] = [];
+  for (const h of historial ?? []) {
+    const delta = Number(h.delta);
+    if (h.tipo === "transferencia_linea_entrada" || h.tipo === "transferencia_linea_salida") {
+      const d = new Date(h.fecha);
+      const key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
+      transferNetByMonth.set(key, (transferNetByMonth.get(key) ?? 0) + delta);
+    }
+    movimientos.push({
+      fecha: h.fecha,
+      descripcion: h.descripcion ?? "Movimiento",
+      delta,
+      orden: 1,
+      createdAt: h.created_at ?? h.fecha,
+    });
+  }
+
+  // Presupuesto base por mes = neto − transferencias netas (evita doble conteo:
+  // las transferencias ya aparecen como filas propias del historial).
+  const filasPresupuesto: LedgerRow[] = [];
+  for (const [key, { anio, mes, neto }] of netByMonth.entries()) {
+    const base = neto - (transferNetByMonth.get(key) ?? 0);
+    if (base === 0) continue;
+    const fecha = `${anio}-${String(mes).padStart(2, "0")}-01`;
+    filasPresupuesto.push({
+      fecha,
+      descripcion: `Presupuesto ${format(new Date(anio, mes - 1, 1), "MMMM yyyy", { locale: es })}`,
+      delta: base,
+      orden: 0,
+      createdAt: `${fecha}T00:00:00`,
+    });
+  }
+
+  // Libro contable acumulado: orden cronológico continuo (rollover histórico).
+  const filas = [...filasPresupuesto, ...movimientos].sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+    if (a.orden !== b.orden) return a.orden - b.orden;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
+
+  let saldo = 0;
+  const filasConBalance = filas.map((f) => {
+    saldo += f.delta;
+    return { ...f, balance: saldo };
+  });
+
+  const balanceActual = saldo;
+  const totalAsignado = filasPresupuesto.reduce((a, f) => a + f.delta, 0);
+  const totalEgresos = movimientos.filter((m) => m.delta < 0).reduce((a, m) => a + Math.abs(m.delta), 0);
 
   return (
     <div className="space-y-6">
@@ -141,7 +167,7 @@ export default async function LineaDetallePage({
         </div>
         <div className="flex items-center gap-2">
           <TransferenciaLineaDialog
-            lineas={lineasOptions.map((l) => ({ id: l.id, nombre: l.nombre, categoriaNombre: l.categoria_nombre }))}
+            lineas={lineasOptions}
             anio={hoy.getFullYear()}
             mes={hoy.getMonth() + 1}
             defaultOrigenId={linea.id}
@@ -150,62 +176,52 @@ export default async function LineaDetallePage({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KPICard label="Presupuesto" value={presupuestado} />
-        <KPICard label="Gastado" value={gastado} tone="danger" />
-        <KPICard
-          label="Disponible"
-          value={presupuestado - gastado}
-          tone={presupuestado - gastado < 0 ? "danger" : "default"}
-        />
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-sm font-normal text-muted-foreground">Movimientos</p>
-            <p className="text-mono-amount text-2xl font-semibold">{numMovimientos}</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <KPICard label="Balance disponible" value={balanceActual} tone={balanceActual < 0 ? "danger" : "default"} />
+        <KPICard label="Presupuesto asignado" value={totalAsignado} tone="success" />
+        <KPICard label="Egresos" value={totalEgresos} tone="danger" />
       </div>
 
-      {(transferenciasLinea ?? []).length > 0 && (
-        <div>
-          <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Transferencias entre líneas</h2>
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Libro contable</h2>
+        {filasConBalance.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              Sin movimientos todavía. Asigna un presupuesto a esta línea desde Presupuestos.
+            </CardContent>
+          </Card>
+        ) : (
           <div className="rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Descripción</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Monto</TableHead>
+                  <TableHead className="text-right">Ingreso</TableHead>
+                  <TableHead className="text-right">Egreso</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(transferenciasLinea ?? []).map((t, i) => (
+                {filasConBalance.map((f, i) => (
                   <TableRow key={i}>
-                    <TableCell>{formatDate(t.fecha)}</TableCell>
-                    <TableCell>{t.descripcion}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {t.tipo === "transferencia_linea_entrada" ? "Recibida" : "Enviada"}
+                    <TableCell className="whitespace-nowrap">{formatDate(f.fecha)}</TableCell>
+                    <TableCell>{f.descripcion}</TableCell>
+                    <TableCell className="text-mono-amount text-right text-accent-success">
+                      {f.delta > 0 ? formatCurrency(f.delta) : ""}
                     </TableCell>
-                    <TableCell
-                      className={
-                        "text-mono-amount " + (Number(t.delta) >= 0 ? "text-accent-success" : "text-accent-danger")
-                      }
-                    >
-                      {Number(t.delta) >= 0 ? "+" : ""}
-                      {formatCurrency(Number(t.delta))}
+                    <TableCell className="text-mono-amount text-right text-accent-danger">
+                      {f.delta < 0 ? formatCurrency(Math.abs(f.delta)) : ""}
+                    </TableCell>
+                    <TableCell className="text-mono-amount text-right font-medium">
+                      {formatCurrency(f.balance)}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-        </div>
-      )}
-
-      <div>
-        <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Historial de transacciones</h2>
-        <TransactionTable data={rows} cuentas={cuentas ?? []} lineas={lineasOptions} />
+        )}
       </div>
     </div>
   );

@@ -27,9 +27,32 @@ async function getFamiliaId() {
   return { supabase, familiaId: miembro.familia_id as string, userId: user.id };
 }
 
+/**
+ * Modelo "bolsa única": todas las transacciones se contabilizan contra la
+ * Cuenta Madre. Si el formulario no envía cuenta_origen_id (o envía vacío),
+ * se resuelve automáticamente a la cuenta marcada como es_cuenta_madre.
+ */
+async function resolverCuentaOrigen(
+  supabase: Awaited<ReturnType<typeof getFamiliaId>>["supabase"],
+  familiaId: string,
+  cuentaOrigenId: string | undefined | null
+): Promise<string> {
+  if (cuentaOrigenId) return cuentaOrigenId;
+  const { data: madre } = await supabase
+    .from("cuentas")
+    .select("id")
+    .eq("familia_id", familiaId)
+    .eq("es_cuenta_madre", true)
+    .eq("activa", true)
+    .maybeSingle();
+  if (!madre) throw new Error("No hay una Cuenta Madre designada. Configúrala en Cuentas.");
+  return madre.id as string;
+}
+
 export async function crearTransaccion(input: TransaccionInput): Promise<{ id: string }> {
   const parsed = transaccionSchema.parse(input);
   const { supabase, familiaId, userId } = await getFamiliaId();
+  const cuentaOrigenId = await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
 
   const { data, error } = await supabase
     .from("transacciones")
@@ -40,11 +63,14 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
       comercio: parsed.comercio || null,
       monto: parsed.monto,
       tipo: parsed.tipo,
-      cuenta_origen_id: parsed.cuenta_origen_id,
+      cuenta_origen_id: cuentaOrigenId,
       cuenta_destino_id: parsed.cuenta_destino_id || null,
       destinatario_externo: parsed.destinatario_externo || null,
       linea_id: parsed.linea_id || null,
       categoria_id: parsed.linea_id ? undefined : null,
+      metodo_pago_id: parsed.metodo_pago_id || null,
+      pagado: parsed.pagado ?? true,
+      fecha_pagado: parsed.fecha_pagado || null,
       notas: parsed.notas || null,
       created_by: userId,
     })
@@ -63,6 +89,7 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
   }
 
   await supabase.rpc("fn_refresh_presupuesto_mes");
+  revalidatePath("/cuenta-madre");
   revalidatePath("/transacciones");
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
@@ -72,7 +99,8 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
 
 export async function actualizarTransaccion(id: string, input: TransaccionInput) {
   const parsed = transaccionSchema.parse(input);
-  const { supabase } = await getFamiliaId();
+  const { supabase, familiaId } = await getFamiliaId();
+  const cuentaOrigenId = await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
 
   const { error } = await supabase
     .from("transacciones")
@@ -82,11 +110,14 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
       comercio: parsed.comercio || null,
       monto: parsed.monto,
       tipo: parsed.tipo,
-      cuenta_origen_id: parsed.cuenta_origen_id,
+      cuenta_origen_id: cuentaOrigenId,
       cuenta_destino_id: parsed.cuenta_destino_id || null,
       destinatario_externo: parsed.destinatario_externo || null,
       linea_id: parsed.linea_id || null,
       categoria_id: parsed.linea_id ? undefined : null,
+      metodo_pago_id: parsed.metodo_pago_id || null,
+      pagado: parsed.pagado ?? true,
+      fecha_pagado: parsed.fecha_pagado || null,
     })
     .eq("id", id);
 
@@ -97,6 +128,7 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
   await recalcularSaldosTransaccion(id);
   await supabase.rpc("fn_refresh_presupuesto_mes");
 
+  revalidatePath("/cuenta-madre");
   revalidatePath("/transacciones");
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
@@ -121,6 +153,7 @@ export async function eliminarTransaccion(id: string) {
   await recalcularSaldosCuentas(tx.cuenta_origen_id, tx.cuenta_destino_id);
   await supabase.rpc("fn_refresh_presupuesto_mes");
 
+  revalidatePath("/cuenta-madre");
   revalidatePath("/transacciones");
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
@@ -141,6 +174,7 @@ export async function restaurarTransaccion(tx: Record<string, unknown>) {
   );
   await supabase.rpc("fn_refresh_presupuesto_mes");
 
+  revalidatePath("/cuenta-madre");
   revalidatePath("/transacciones");
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");

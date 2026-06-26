@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { FamilySettingsForm } from "@/components/settings/FamilySettingsForm";
 import { CategoryList } from "@/components/settings/CategoryList";
+import { MetodoPagoList } from "@/components/settings/MetodoPagoList";
 import { MembersList } from "@/components/settings/MembersList";
 
 function unwrap<T>(rel: unknown): T | null {
@@ -23,7 +24,7 @@ export default async function ConfiguracionPage() {
   const familia = unwrap<{ nombre: string; moneda: string }>(miembroActual?.familias);
   const esAdmin = miembroActual?.rol === "admin";
 
-  const [{ data: miembros }, { data: categorias }] = await Promise.all([
+  const [{ data: miembros }, { data: categorias }, { data: metodosPago }] = await Promise.all([
     supabase.from("miembros").select("id, nombre, rol, user_id").eq("familia_id", familiaId),
     supabase
       .from("categorias")
@@ -31,6 +32,13 @@ export default async function ConfiguracionPage() {
       .eq("familia_id", familiaId)
       .eq("activa", true)
       .order("orden"),
+    supabase
+      .from("metodos_pago")
+      .select("id, nombre, color")
+      .eq("familia_id", familiaId)
+      .eq("activa", true)
+      .order("orden")
+      .order("nombre"),
   ]);
 
   return (
@@ -47,6 +55,8 @@ export default async function ConfiguracionPage() {
         <MembersList miembros={miembros ?? []} esAdmin={esAdmin} miUserId={user!.id} />
 
         <CategoryList categorias={categorias ?? []} />
+
+        <MetodoPagoList metodos={metodosPago ?? []} />
       </div>
     </div>
   );
