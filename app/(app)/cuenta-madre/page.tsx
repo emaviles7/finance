@@ -2,32 +2,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
+import { CuentaMadreLedger, type LedgerRow } from "@/components/transactions/CuentaMadreLedger";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/utils/currency";
-import { formatDate } from "@/lib/utils/dates";
 
-type HistorialRow = {
-  id: string;
-  fecha: string;
-  descripcion: string | null;
-  tipo: string;
-  es_ajuste_saldo: boolean | null;
-  delta: number;
-  saldo_posterior: number;
-  notas: string | null;
-  comercio: string | null;
-  destinatario_externo: string | null;
-  metodo_pago: string | null;
-};
+type TxTipo = "ingreso" | "egreso" | "transferencia" | "transferencia_externa";
 
 function unwrap<T>(rel: unknown): T | null {
   if (!rel) return null;
@@ -71,36 +50,33 @@ export default async function CuentaMadrePage() {
     );
   }
 
-  const [{ data: saldoRow }, { data: historial }, { data: metodosPago }, { data: lineas }] =
-    await Promise.all([
-      supabase.from("v_saldo_cuentas").select("saldo_calculado").eq("id", cuenta.id).maybeSingle(),
-      supabase
-        .from("v_historial_cuenta")
-        .select(
-          "id, fecha, descripcion, tipo, es_ajuste_saldo, delta, saldo_posterior, notas, comercio, destinatario_externo, metodo_pago"
-        )
-        .eq("cuenta_id", cuenta.id)
-        // Orden cronológico (desde la creación) para que el balance acumulado
-        // fluya naturalmente de arriba hacia abajo.
-        .order("fecha", { ascending: true })
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("metodos_pago")
-        .select("nombre")
-        .eq("familia_id", familiaId)
-        .eq("activa", true)
-        .order("orden")
-        .order("nombre"),
-      supabase
-        .from("lineas_presupuestarias")
-        .select("id, nombre, categoria_id, categorias(nombre, es_ingreso)")
-        .eq("familia_id", familiaId)
-        .eq("activa", true)
-        .order("orden"),
-    ]);
-
-  const balanceActual = Number(saldoRow?.saldo_calculado ?? cuenta.saldo_inicial);
-  const filas = (historial ?? []) as HistorialRow[];
+  const [{ data: transacciones }, { data: metodosPago }, { data: lineas }] = await Promise.all([
+    supabase
+      .from("transacciones")
+      .select(
+        `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
+         linea_id, metodo_pago, pagado, fecha_pagado, cuenta_origen_id, cuenta_destino_id`
+      )
+      .eq("familia_id", familiaId)
+      .or(`cuenta_origen_id.eq.${cuenta.id},cuenta_destino_id.eq.${cuenta.id}`)
+      // Orden cronológico (desde la creación) para que el balance acumulado
+      // fluya naturalmente de arriba hacia abajo.
+      .order("fecha", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("metodos_pago")
+      .select("nombre")
+      .eq("familia_id", familiaId)
+      .eq("activa", true)
+      .order("orden")
+      .order("nombre"),
+    supabase
+      .from("lineas_presupuestarias")
+      .select("id, nombre, categoria_id, categorias(nombre, es_ingreso)")
+      .eq("familia_id", familiaId)
+      .eq("activa", true)
+      .order("orden"),
+  ]);
 
   const metodosPagoOptions = (metodosPago ?? []).map((m) => m.nombre);
   const lineasOptions = (lineas ?? []).map((l) => ({
@@ -110,8 +86,48 @@ export default async function CuentaMadrePage() {
     es_ingreso: unwrap<{ es_ingreso: boolean }>(l.categorias)?.es_ingreso ?? false,
   }));
 
-  const ingresos = filas.filter((f) => Number(f.delta) > 0).reduce((a, f) => a + Number(f.delta), 0);
-  const egresos = filas.filter((f) => Number(f.delta) < 0).reduce((a, f) => a + Math.abs(Number(f.delta)), 0);
+  // Delta respecto a la Cuenta Madre y balance acumulado desde el saldo inicial.
+  function deltaDe(t: {
+    tipo: TxTipo;
+    monto: number;
+    cuenta_origen_id: string | null;
+    cuenta_destino_id: string | null;
+  }) {
+    const monto = Number(t.monto);
+    if (t.cuenta_origen_id === cuenta!.id) {
+      return t.tipo === "ingreso" ? monto : -monto;
+    }
+    if (t.cuenta_destino_id === cuenta!.id && t.tipo === "transferencia") {
+      return monto;
+    }
+    return 0;
+  }
+
+  let saldo = Number(cuenta.saldo_inicial);
+  const rows: LedgerRow[] = (transacciones ?? []).map((t) => {
+    const delta = deltaDe(t);
+    saldo += delta;
+    return {
+      id: t.id,
+      fecha: t.fecha,
+      descripcion: t.descripcion,
+      destinatarioOrigen: t.destinatario_externo || t.comercio || t.metodo_pago || "—",
+      notas: t.notas,
+      delta,
+      balance: saldo,
+      esAjuste: t.es_ajuste_saldo ?? false,
+      monto: Number(t.monto),
+      tipo: t.tipo,
+      linea_id: t.linea_id,
+      metodo_pago: t.metodo_pago,
+      pagado: t.pagado ?? true,
+      fecha_pagado: t.fecha_pagado,
+    };
+  });
+
+  const balanceActual = saldo;
+  const ingresos = rows.filter((r) => r.delta > 0).reduce((a, r) => a + r.delta, 0);
+  const egresos = rows.filter((r) => r.delta < 0).reduce((a, r) => a + Math.abs(r.delta), 0);
 
   return (
     <div className="space-y-6">
@@ -120,7 +136,7 @@ export default async function CuentaMadrePage() {
           <span className="size-3 rounded-full" style={{ backgroundColor: cuenta.color ?? "#7C3AED" }} />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">{cuenta.nombre}</h1>
-            <p className="text-sm text-muted-foreground">Libro Mayor · {filas.length} movimientos</p>
+            <p className="text-sm text-muted-foreground">Libro Mayor · {rows.length} movimientos</p>
           </div>
         </div>
         <TransactionSheet
@@ -137,54 +153,19 @@ export default async function CuentaMadrePage() {
         <KPICard label="Egresos" value={egresos} tone="danger" />
       </div>
 
-      {filas.length === 0 ? (
+      {rows.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             Sin movimientos todavía. Registra tu primera transacción.
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Destinatario / Origen</TableHead>
-                <TableHead>Nota</TableHead>
-                <TableHead className="text-right">Ingreso</TableHead>
-                <TableHead className="text-right">Egreso</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filas.map((f) => {
-                const delta = Number(f.delta);
-                const destinatarioOrigen =
-                  f.destinatario_externo || f.comercio || f.metodo_pago || "—";
-                return (
-                  <TableRow key={f.id}>
-                    <TableCell className="whitespace-nowrap">{formatDate(f.fecha)}</TableCell>
-                    <TableCell>
-                      {f.es_ajuste_saldo ? "Ajuste de saldo" : f.descripcion}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{destinatarioOrigen}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{f.notas || "—"}</TableCell>
-                    <TableCell className="text-mono-amount text-right text-accent-success">
-                      {delta > 0 ? formatCurrency(delta) : ""}
-                    </TableCell>
-                    <TableCell className="text-mono-amount text-right text-accent-danger">
-                      {delta < 0 ? formatCurrency(Math.abs(delta)) : ""}
-                    </TableCell>
-                    <TableCell className="text-mono-amount text-right font-medium">
-                      {formatCurrency(Number(f.saldo_posterior))}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <CuentaMadreLedger
+          rows={rows}
+          metodosPago={metodosPagoOptions}
+          lineas={lineasOptions}
+          cuentaMadreId={cuenta.id}
+        />
       )}
     </div>
   );
