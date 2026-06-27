@@ -38,6 +38,7 @@ export async function crearMetodoPago(input: MetodoPagoFormValues): Promise<{ id
   if (error) throw new Error(error.message);
   revalidatePath("/configuracion");
   revalidatePath("/transacciones");
+  revalidatePath("/cuenta-madre");
   return { id: data.id };
 }
 
@@ -53,6 +54,7 @@ export async function actualizarMetodoPago(id: string, input: MetodoPagoFormValu
   if (error) throw new Error(error.message);
   revalidatePath("/configuracion");
   revalidatePath("/transacciones");
+  revalidatePath("/cuenta-madre");
 }
 
 export async function eliminarMetodoPago(id: string) {
@@ -65,6 +67,7 @@ export async function eliminarMetodoPago(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/configuracion");
   revalidatePath("/transacciones");
+  revalidatePath("/cuenta-madre");
 }
 
 export async function restaurarMetodoPago(id: string) {
@@ -77,4 +80,5 @@ export async function restaurarMetodoPago(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/configuracion");
   revalidatePath("/transacciones");
+  revalidatePath("/cuenta-madre");
 }

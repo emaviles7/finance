@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { cuentaSchema, type CuentaInput } from "@/lib/validations/account.schema";
+import { todayISO } from "@/lib/utils/dates";
 
 async function getFamiliaId() {
   const supabase = await createClient();
@@ -146,6 +147,56 @@ export async function establecerSaldoInicialMes(cuentaId: string, anio: number, 
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
   revalidatePath("/transacciones");
+}
+
+/**
+ * Ajusta el saldo ACTUAL de la Cuenta Madre a un valor deseado (migración
+ * desde Excel u otra fuente). Calcula la diferencia contra el saldo
+ * calculado en vivo y registra una única transacción de Ajuste de Saldo
+ * (ingreso/egreso según el signo), marcada con es_ajuste_saldo +
+ * excluir_reportes. Nunca toca el historial existente; el trigger de saldo
+ * y la auditoría (created_by/created_at + audit_log) hacen el resto.
+ */
+export async function ajustarSaldoCuentaMadre(saldoDeseado: number) {
+  const { supabase, familiaId, userId } = await getFamiliaId();
+
+  const { data: cuenta } = await supabase
+    .from("cuentas")
+    .select("id")
+    .eq("familia_id", familiaId)
+    .eq("es_cuenta_madre", true)
+    .eq("activa", true)
+    .maybeSingle();
+  if (!cuenta) throw new Error("No hay una Cuenta Madre designada.");
+
+  const { data: saldoRow } = await supabase
+    .from("v_saldo_cuentas")
+    .select("saldo_calculado")
+    .eq("id", cuenta.id)
+    .maybeSingle();
+  const saldoActual = Number(saldoRow?.saldo_calculado ?? 0);
+
+  const diferencia = Math.round((saldoDeseado - saldoActual) * 100) / 100;
+  if (diferencia === 0) return;
+
+  const { error } = await supabase.from("transacciones").insert({
+    familia_id: familiaId,
+    cuenta_origen_id: cuenta.id,
+    fecha: todayISO(),
+    descripcion: "Ajuste de saldo",
+    monto: Math.abs(diferencia),
+    tipo: diferencia > 0 ? "ingreso" : "egreso",
+    es_ajuste_saldo: true,
+    excluir_reportes: true,
+    created_by: userId,
+  });
+  if (error) throw new Error(error.message);
+
+  await supabase.rpc("fn_recalcular_saldo_cuenta", { p_cuenta_id: cuenta.id });
+  revalidatePath("/cuenta-madre");
+  revalidatePath("/transacciones");
+  revalidatePath("/dashboard");
+  revalidatePath("/cuentas");
 }
 
 export async function eliminarCuenta(id: string) {

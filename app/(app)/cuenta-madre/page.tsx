@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
+import { AjustarSaldoDialog } from "@/components/transactions/AjustarSaldoDialog";
 import { CuentaMadreLedger, type LedgerRow } from "@/components/transactions/CuentaMadreLedger";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -141,6 +142,7 @@ export default async function CuentaMadrePage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <AjustarSaldoDialog saldoActual={balanceActual} />
           <TransactionSheet
             metodosPago={metodosPagoOptions}
             lineas={lineasOptions}

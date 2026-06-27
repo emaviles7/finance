@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -54,6 +55,7 @@ export function TransactionForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<TransaccionFormInput, unknown, TransaccionInput>({
     resolver: zodResolver(transaccionSchema),
@@ -74,6 +76,29 @@ export function TransactionForm({
 
   const tipo = watch("tipo");
   const pagado = watch("pagado");
+
+  // Método de pago: dropdown desde Configuración + opción "Otros" (texto libre
+  // solo para esa transacción, no se guarda en la lista).
+  const OTROS = "__otros__";
+  const NINGUNO = "__none__";
+  const metodoPagoValue = watch("metodo_pago") ?? "";
+  const [modoOtro, setModoOtro] = useState(
+    () => !!metodoPagoValue && !metodosPago.includes(metodoPagoValue)
+  );
+  const metodoSelectValue = modoOtro ? OTROS : metodoPagoValue === "" ? NINGUNO : metodoPagoValue;
+
+  function onSelectMetodo(v: string | null) {
+    if (v === OTROS) {
+      setModoOtro(true);
+      setValue("metodo_pago", "");
+    } else if (v === NINGUNO || !v) {
+      setModoOtro(false);
+      setValue("metodo_pago", "");
+    } else {
+      setModoOtro(false);
+      setValue("metodo_pago", v);
+    }
+  }
 
   const gruposLineas = new Map<string, LineaOption[]>();
   for (const l of lineas.filter((l) => l.es_ingreso === (tipo === "ingreso"))) {
@@ -131,24 +156,30 @@ export function TransactionForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="metodo_pago">
-          {tipo === "ingreso" ? "Origen del ingreso (opcional)" : "Método de pago (opcional)"}
-        </Label>
-        <Input
-          id="metodo_pago"
-          list="metodos-pago-lista"
-          placeholder={
-            tipo === "ingreso"
-              ? "De qué cuenta proviene (o escribe uno momentáneo)"
-              : "Cómo se pagó (o escribe uno momentáneo)"
-          }
-          {...register("metodo_pago")}
-        />
-        <datalist id="metodos-pago-lista">
-          {metodosPago.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
+        <Label>{tipo === "ingreso" ? "Origen del ingreso (opcional)" : "Método de pago (opcional)"}</Label>
+        <Select value={metodoSelectValue} onValueChange={onSelectMetodo}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Selecciona...">
+              {(v: string) => (v === OTROS ? "Otros" : v === NINGUNO || !v ? "(Ninguno)" : v)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NINGUNO}>(Ninguno)</SelectItem>
+            {metodosPago.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+            <SelectItem value={OTROS}>Otros</SelectItem>
+          </SelectContent>
+        </Select>
+        {modoOtro && (
+          <Input
+            autoFocus
+            placeholder="Escribe el método de pago"
+            {...register("metodo_pago")}
+          />
+        )}
         {tipo === "egreso" && (
           <p className="text-xs text-muted-foreground">El egreso sale de la Cuenta Madre.</p>
         )}

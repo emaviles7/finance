@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { LineaSheet } from "@/components/budgets/LineaSheet";
 import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
 import { PresupuestoGrid, type GridLinea, type GridPresupuesto } from "@/components/budgets/PresupuestoGrid";
+import { LineaAcciones } from "@/components/budgets/LineaAcciones";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/currency";
 
@@ -25,7 +26,7 @@ export default async function PresupuestosPage() {
 
   await supabase.rpc("fn_refresh_presupuesto_mes");
 
-  const [{ data: categorias }, { data: lineas }, { data: presupuestosHist }, { data: gastosHist }] =
+  const [{ data: categorias }, { data: lineas }, { data: presupuestosHist }, { data: gastosHist }, { data: ajustesHist }] =
     await Promise.all([
       supabase
         .from("categorias")
@@ -48,6 +49,10 @@ export default async function PresupuestosPage() {
       supabase
         .from("v_presupuesto_mes")
         .select("linea_id, anio, mes, total_gastado")
+        .eq("familia_id", familiaId),
+      supabase
+        .from("ajustes_linea")
+        .select("linea_id, anio, mes, monto")
         .eq("familia_id", familiaId),
     ]);
 
@@ -73,10 +78,13 @@ export default async function PresupuestosPage() {
     const presupuesto = (presupuestosHist ?? [])
       .filter((p) => p.linea_id === lineaId && hastaHoy(p.anio, p.mes))
       .reduce((a, p) => a + Number(p.monto_presupuestado), 0);
+    const ajustes = (ajustesHist ?? [])
+      .filter((p) => p.linea_id === lineaId && hastaHoy(p.anio, p.mes))
+      .reduce((a, p) => a + Number(p.monto), 0);
     const gastado = (gastosHist ?? [])
       .filter((g) => g.linea_id === lineaId && hastaHoy(g.anio, g.mes))
       .reduce((a, g) => a + Number(g.total_gastado), 0);
-    return presupuesto - gastado;
+    return presupuesto + ajustes - gastado;
   }
 
   // Agrupar por categoría conservando el orden de las líneas.
@@ -139,22 +147,25 @@ export default async function PresupuestosPage() {
                       {lineasCat.map((l) => {
                         const disp = disponibleLinea(l.id);
                         return (
-                          <li key={l.id} className="flex items-center justify-between">
+                          <li key={l.id} className="flex items-center justify-between gap-2">
                             <Link
                               href={`/presupuestos/${l.id}`}
-                              className="flex items-center gap-2 text-sm hover:underline"
+                              className="flex min-w-0 items-center gap-2 text-sm hover:underline"
                             >
-                              <span className="size-2.5 rounded-full" style={{ backgroundColor: l.color }} />
-                              {l.nombre}
+                              <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: l.color }} />
+                              <span className="truncate">{l.nombre}</span>
                             </Link>
-                            <span
-                              className={
-                                "text-mono-amount text-sm " +
-                                (disp < 0 ? "text-accent-danger" : "text-foreground")
-                              }
-                            >
-                              {formatCurrency(disp)}
-                            </span>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <span
+                                className={
+                                  "text-mono-amount text-sm " +
+                                  (disp < 0 ? "text-accent-danger" : "text-foreground")
+                                }
+                              >
+                                {formatCurrency(disp)}
+                              </span>
+                              <LineaAcciones lineaId={l.id} nombre={l.nombre} disponibleActual={disp} />
+                            </div>
                           </li>
                         );
                       })}
