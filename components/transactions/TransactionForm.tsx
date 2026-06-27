@@ -185,9 +185,17 @@ export function TransactionForm({
             {...register("metodo_pago")}
           />
         )}
-        {tipo === "egreso" && (
-          <p className="text-xs text-muted-foreground">El egreso sale de la Cuenta Madre.</p>
-        )}
+        {tipo === "egreso" &&
+          (metodoPagoValue === cuentaMadreNombre ? (
+            <p className="text-xs text-muted-foreground">
+              Este egreso sale de la Cuenta Madre y descuenta su saldo.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Este egreso NO afecta el saldo de la Cuenta Madre (se pagó con otro método). Solo
+              cuenta para la línea presupuestaria.
+            </p>
+          ))}
       </div>
 
       <div className="space-y-2">

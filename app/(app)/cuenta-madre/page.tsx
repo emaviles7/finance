@@ -98,12 +98,19 @@ export default async function CuentaMadrePage() {
   function deltaDe(t: {
     tipo: TxTipo;
     monto: number;
+    metodo_pago: string | null;
     cuenta_origen_id: string | null;
     cuenta_destino_id: string | null;
   }) {
     const monto = Number(t.monto);
     if (t.cuenta_origen_id === cuenta!.id) {
-      return t.tipo === "ingreso" ? monto : -monto;
+      if (t.tipo === "ingreso") return monto;
+      // Un egreso solo descuenta de la Cuenta Madre si se pagó CON ella
+      // (su método de pago es el nombre de la cuenta). Con otro método, no
+      // afecta su saldo.
+      if (t.tipo === "egreso") return t.metodo_pago === cuenta!.nombre ? -monto : 0;
+      // Transferencia interna/externa: el dinero sale de la cuenta.
+      return -monto;
     }
     if (t.cuenta_destino_id === cuenta!.id && t.tipo === "transferencia") {
       return monto;
@@ -111,8 +118,14 @@ export default async function CuentaMadrePage() {
     return 0;
   }
 
+  // El libro mayor de la Cuenta Madre solo muestra lo que la involucra: se
+  // ocultan los egresos pagados con OTRO método (no tocan su saldo).
+  const transaccionesCuentaMadre = (transacciones ?? []).filter(
+    (t) => !(t.tipo === "egreso" && t.metodo_pago !== cuenta.nombre)
+  );
+
   let saldo = Number(cuenta.saldo_inicial);
-  const rows: LedgerRow[] = (transacciones ?? []).map((t) => {
+  const rows: LedgerRow[] = transaccionesCuentaMadre.map((t) => {
     const delta = deltaDe(t);
     saldo += delta;
     const linea = unwrap<{ nombre: string; color: string | null }>(t.linea);
