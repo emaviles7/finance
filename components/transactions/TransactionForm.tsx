@@ -70,15 +70,12 @@ export function TransactionForm({
       cuenta_origen_id: cuentaMadreId,
       linea_id: "",
       metodo_pago: "",
-      pagado: true,
-      fecha_pagado: "",
       notas: "",
       ...defaultValues,
     },
   });
 
   const tipo = watch("tipo");
-  const pagado = watch("pagado");
 
   // Método de pago: dropdown desde Configuración + opción "Otros" (texto libre
   // solo para esa transacción, no se guarda en la lista).
@@ -228,19 +225,6 @@ export function TransactionForm({
       <div className="space-y-2">
         <Label htmlFor="notas">Nota (opcional)</Label>
         <Input id="notas" {...register("notas")} />
-      </div>
-
-      <div className="space-y-2 rounded-md border p-3">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="size-4" {...register("pagado")} />
-          Pagado
-        </label>
-        {pagado && (
-          <div className="space-y-2">
-            <Label htmlFor="fecha_pagado">Fecha de pago (opcional)</Label>
-            <Input id="fecha_pagado" type="date" {...register("fecha_pagado")} />
-          </div>
-        )}
       </div>
 
       <div className="mt-auto flex justify-end gap-2 pt-2">

@@ -69,8 +69,9 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
       linea_id: parsed.linea_id || null,
       categoria_id: parsed.linea_id ? undefined : null,
       metodo_pago: parsed.metodo_pago || null,
-      pagado: parsed.pagado ?? true,
-      fecha_pagado: parsed.fecha_pagado || null,
+      // El estado de pago se gestiona desde la tabla de Transacciones; las
+      // nuevas transacciones nacen como pendientes.
+      pagado: false,
       notas: parsed.notas || null,
       created_by: userId,
     })
@@ -116,8 +117,8 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
       linea_id: parsed.linea_id || null,
       categoria_id: parsed.linea_id ? undefined : null,
       metodo_pago: parsed.metodo_pago || null,
-      pagado: parsed.pagado ?? true,
-      fecha_pagado: parsed.fecha_pagado || null,
+      // pagado / fecha_pagado NO se tocan aquí: se gestionan desde la columna
+      // Estado de la tabla, para no pisar el estado al editar otros campos.
     })
     .eq("id", id);
 
@@ -133,6 +134,25 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
   revalidatePath("/presupuestos");
+}
+
+/**
+ * Marca/desmarca el estado de pago de una transacción desde la columna
+ * "Estado" de la tabla. Es solo informativo (no afecta balances). Al marcar
+ * como pagada sin fecha, se usa la fecha provista (normalmente hoy).
+ */
+export async function actualizarEstadoPago(id: string, pagado: boolean, fechaPagado: string | null) {
+  const { supabase } = await getFamiliaId();
+
+  const { error } = await supabase
+    .from("transacciones")
+    .update({ pagado, fecha_pagado: pagado ? fechaPagado || null : null })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/transacciones");
+  revalidatePath("/cuenta-madre");
 }
 
 /**

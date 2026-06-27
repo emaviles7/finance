@@ -118,8 +118,6 @@ export function CuentaMadreLedger({
                         tipo: f.tipo === "ingreso" ? "ingreso" : "egreso",
                         linea_id: f.linea_id ?? "",
                         metodo_pago: f.metodo_pago ?? "",
-                        pagado: f.pagado,
-                        fecha_pagado: f.fecha_pagado ?? "",
                         notas: f.notas ?? "",
                       }}
                       trigger={

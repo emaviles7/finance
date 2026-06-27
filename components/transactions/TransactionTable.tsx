@@ -46,8 +46,12 @@ import {
   StickyNoteIcon,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
-import { formatDate } from "@/lib/utils/dates";
-import { eliminarTransaccion, restaurarTransaccion } from "@/lib/actions/transacciones";
+import { formatDate, todayISO } from "@/lib/utils/dates";
+import {
+  eliminarTransaccion,
+  restaurarTransaccion,
+  actualizarEstadoPago,
+} from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 import { TransactionSheet } from "./TransactionSheet";
 import { type LineaOption } from "./TransactionForm";
@@ -105,6 +109,44 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
   const [orden, setOrden] = useState<"desc" | "asc">("desc");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Estado de pago editable desde la tabla (optimista para respuesta inmediata).
+  const [pagoOverrides, setPagoOverrides] = useState<Map<string, { pagado: boolean; fecha_pagado: string | null }>>(
+    new Map()
+  );
+  const [pagoPendingId, setPagoPendingId] = useState<string | null>(null);
+
+  function getPago(row: TransaccionRow) {
+    return pagoOverrides.get(row.id) ?? { pagado: row.pagado, fecha_pagado: row.fecha_pagado };
+  }
+
+  async function aplicarPago(id: string, pagado: boolean, fecha: string | null) {
+    setPagoOverrides((prev) => new Map(prev).set(id, { pagado, fecha_pagado: pagado ? fecha : null }));
+    setPagoPendingId(id);
+    try {
+      await actualizarEstadoPago(id, pagado, fecha);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al actualizar el estado");
+      setPagoOverrides((prev) => {
+        const m = new Map(prev);
+        m.delete(id);
+        return m;
+      });
+    } finally {
+      setPagoPendingId(null);
+    }
+  }
+
+  function togglePagado(row: TransaccionRow) {
+    const cur = getPago(row);
+    const nuevoPagado = !cur.pagado;
+    aplicarPago(row.id, nuevoPagado, nuevoPagado ? cur.fecha_pagado ?? todayISO() : null);
+  }
+
+  function setFechaPago(row: TransaccionRow, fecha: string) {
+    aplicarPago(row.id, true, fecha || null);
+  }
 
   const hayFiltrosActivos =
     search !== "" ||
@@ -219,19 +261,48 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         ),
       },
       {
-        accessorKey: "pagado",
+        id: "estado",
         header: "Estado",
-        cell: ({ row }) =>
-          row.original.pagado ? (
-            <div className="text-sm">
-              <Badge className="bg-accent-success/15 text-accent-success">Pagado</Badge>
-              {row.original.fecha_pagado && (
-                <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(row.original.fecha_pagado)}</p>
-              )}
-            </div>
-          ) : (
-            <Badge className="bg-accent-warning/15 text-accent-warning">Pendiente</Badge>
-          ),
+        cell: ({ row }) => {
+          const pago = getPago(row.original);
+          return (
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={pago.pagado}
+                disabled={pagoPendingId === row.original.id}
+                onChange={() => togglePagado(row.original)}
+              />
+              <Badge
+                className={
+                  pago.pagado
+                    ? "bg-accent-success/15 text-accent-success"
+                    : "bg-accent-warning/15 text-accent-warning"
+                }
+              >
+                {pago.pagado ? "Pagado" : "Pendiente"}
+              </Badge>
+            </label>
+          );
+        },
+      },
+      {
+        id: "fecha_pago",
+        header: "Fecha",
+        cell: ({ row }) => {
+          const pago = getPago(row.original);
+          if (!pago.pagado) return <span className="text-xs text-muted-foreground">—</span>;
+          return (
+            <input
+              type="date"
+              value={pago.fecha_pagado ?? ""}
+              disabled={pagoPendingId === row.original.id}
+              onChange={(e) => setFechaPago(row.original, e.target.value)}
+              className="h-8 rounded-md border bg-transparent px-2 text-xs"
+            />
+          );
+        },
       },
       {
         id: "acciones",
@@ -252,8 +323,6 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
                 tipo: row.original.tipo === "ingreso" ? "ingreso" : "egreso",
                 linea_id: row.original.linea_id ?? "",
                 metodo_pago: row.original.metodo_pago ?? "",
-                pagado: row.original.pagado,
-                fecha_pagado: row.original.fecha_pagado ?? "",
                 notas: row.original.notas ?? "",
               }}
               trigger={
@@ -269,7 +338,8 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         ),
       },
     ],
-    [metodosPago, lineas, cuentaMadreId, cuentaMadreNombre]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [metodosPago, lineas, cuentaMadreId, cuentaMadreNombre, pagoOverrides, pagoPendingId]
   );
 
   const table = useReactTable({

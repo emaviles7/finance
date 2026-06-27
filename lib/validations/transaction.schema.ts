@@ -22,8 +22,6 @@ export const transaccionSchema = z.object({
   destinatario_externo: z.string().max(150).optional().or(z.literal("")),
   linea_id: z.string().uuid().optional().or(z.literal("")),
   metodo_pago: z.string().max(100).optional().or(z.literal("")),
-  pagado: z.boolean().optional().default(true),
-  fecha_pagado: z.string().optional().or(z.literal("")),
   guardarBeneficiario: z.boolean().optional(),
   notas: z.string().optional().or(z.literal("")),
 });
