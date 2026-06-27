@@ -1,13 +1,17 @@
 -- =============================================
--- 025: Exponer el id de la fila origen en v_historial_linea
+-- 026: Exponer el id de la fila origen en v_historial_linea
 --
 -- Necesario para poder eliminar un movimiento puntual del libro contable de
 -- una línea (ajuste de balance o transacción) desde la UI sin tener que
--- volver a consultar la tabla origen por separado. No cambia ninguna
--- columna existente, solo añade `id`.
+-- volver a consultar la tabla origen por separado.
+--
+-- Se usa DROP + CREATE (no CREATE OR REPLACE) porque añadimos `id` como primera
+-- columna y CREATE OR REPLACE no permite reordenar/renombrar columnas de una
+-- vista existente. Ningún otro objeto de la BD depende de esta vista.
 -- =============================================
 
-CREATE OR REPLACE VIEW v_historial_linea AS
+DROP VIEW IF EXISTS v_historial_linea;
+CREATE VIEW v_historial_linea AS
 SELECT
   m.id,
   m.linea_id,

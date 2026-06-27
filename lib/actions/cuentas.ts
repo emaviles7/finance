@@ -231,18 +231,35 @@ export async function actualizarNombreColorCuentaMadre(nombre: string, color: st
   const { supabase, familiaId } = await getFamiliaId();
   const { data: cuenta } = await supabase
     .from("cuentas")
-    .select("id")
+    .select("id, nombre")
     .eq("familia_id", familiaId)
     .eq("es_cuenta_madre", true)
     .eq("activa", true)
     .maybeSingle();
   if (!cuenta) throw new Error("No hay una Cuenta Madre designada.");
 
+  const nombreAnterior = cuenta.nombre as string;
+
   const { error } = await supabase
     .from("cuentas")
     .update({ nombre: nombreLimpio, color })
     .eq("id", cuenta.id);
   if (error) throw new Error(error.message);
+
+  // El saldo de la Cuenta Madre descuenta los egresos cuyo metodo_pago
+  // coincide con su nombre. Si el nombre cambia, hay que renombrar ese método
+  // en las transacciones históricas para que esos egresos sigan contando; de
+  // lo contrario dejarían de descontar y el saldo saltaría incorrectamente.
+  if (nombreLimpio !== nombreAnterior) {
+    const { error: txError } = await supabase
+      .from("transacciones")
+      .update({ metodo_pago: nombreLimpio })
+      .eq("familia_id", familiaId)
+      .eq("metodo_pago", nombreAnterior);
+    if (txError) throw new Error(txError.message);
+
+    await supabase.rpc("fn_recalcular_saldo_cuenta", { p_cuenta_id: cuenta.id });
+  }
 
   revalidatePath("/configuracion");
   revalidatePath("/transacciones");
