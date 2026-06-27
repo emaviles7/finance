@@ -145,8 +145,6 @@ export default async function LineaDetallePage({
   });
 
   const balanceActual = saldo;
-  const totalAsignado = filasPresupuesto.reduce((a, f) => a + f.delta, 0);
-  const totalEgresos = movimientos.filter((m) => m.delta < 0).reduce((a, m) => a + Math.abs(m.delta), 0);
 
   return (
     <div className="space-y-6">
@@ -176,10 +174,8 @@ export default async function LineaDetallePage({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:max-w-xs">
         <KPICard label="Balance disponible" value={balanceActual} tone={balanceActual < 0 ? "danger" : "default"} />
-        <KPICard label="Presupuesto asignado" value={totalAsignado} tone="success" />
-        <KPICard label="Egresos" value={totalEgresos} tone="danger" />
       </div>
 
       <div>

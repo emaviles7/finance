@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { ColorChip } from "@/components/shared/ColorChip";
 import { PencilIcon, Trash2Icon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/dates";
@@ -24,7 +25,10 @@ export type LedgerRow = {
   id: string;
   fecha: string;
   descripcion: string;
-  destinatarioOrigen: string;
+  origen: string | null;
+  origenColor: string | null;
+  lineaNombre: string | null;
+  lineaColor: string | null;
   notas: string | null;
   delta: number;
   balance: number;
@@ -34,8 +38,6 @@ export type LedgerRow = {
   tipo: "ingreso" | "egreso" | "transferencia" | "transferencia_externa";
   linea_id: string | null;
   metodo_pago: string | null;
-  pagado: boolean;
-  fecha_pagado: string | null;
 };
 
 export function CuentaMadreLedger({
@@ -77,7 +79,8 @@ export function CuentaMadreLedger({
           <TableRow>
             <TableHead>Fecha</TableHead>
             <TableHead>Descripción</TableHead>
-            <TableHead>Destinatario / Origen</TableHead>
+            <TableHead>Origen</TableHead>
+            <TableHead>Destino</TableHead>
             <TableHead>Nota</TableHead>
             <TableHead className="text-right">Ingreso</TableHead>
             <TableHead className="text-right">Egreso</TableHead>
@@ -90,7 +93,20 @@ export function CuentaMadreLedger({
             <TableRow key={f.id}>
               <TableCell className="whitespace-nowrap">{formatDate(f.fecha)}</TableCell>
               <TableCell>{f.esAjuste ? "Ajuste de saldo" : f.descripcion}</TableCell>
-              <TableCell className="text-muted-foreground">{f.destinatarioOrigen}</TableCell>
+              <TableCell>
+                {f.origen ? (
+                  <ColorChip label={f.origen} color={f.origenColor} />
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {f.lineaNombre ? (
+                  <ColorChip label={f.lineaNombre} color={f.lineaColor} />
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
               <TableCell className="text-xs text-muted-foreground">{f.notas || "—"}</TableCell>
               <TableCell className="text-mono-amount text-right text-accent-success">
                 {f.delta > 0 ? formatCurrency(f.delta) : ""}

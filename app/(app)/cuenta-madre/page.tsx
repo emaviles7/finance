@@ -57,7 +57,8 @@ export default async function CuentaMadrePage() {
       .from("transacciones")
       .select(
         `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
-         linea_id, metodo_pago, pagado, fecha_pagado, cuenta_origen_id, cuenta_destino_id`
+         linea_id, metodo_pago, cuenta_origen_id, cuenta_destino_id,
+         linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, color)`
       )
       .eq("familia_id", familiaId)
       .or(`cuenta_origen_id.eq.${cuenta.id},cuenta_destino_id.eq.${cuenta.id}`)
@@ -67,7 +68,7 @@ export default async function CuentaMadrePage() {
       .order("created_at", { ascending: true }),
     supabase
       .from("metodos_pago")
-      .select("nombre")
+      .select("nombre, color")
       .eq("familia_id", familiaId)
       .eq("activa", true)
       .order("orden")
@@ -81,6 +82,11 @@ export default async function CuentaMadrePage() {
   ]);
 
   const metodosPagoOptions = (metodosPago ?? []).map((m) => m.nombre);
+  // Color por método de pago (y la propia Cuenta Madre como origen de egresos).
+  const metodoColores = new Map<string, string>();
+  for (const m of metodosPago ?? []) if (m.color) metodoColores.set(m.nombre, m.color);
+  if (cuenta.color) metodoColores.set(cuenta.nombre, cuenta.color);
+
   const lineasOptions = (lineas ?? []).map((l) => ({
     id: l.id,
     nombre: l.nombre,
@@ -109,11 +115,16 @@ export default async function CuentaMadrePage() {
   const rows: LedgerRow[] = (transacciones ?? []).map((t) => {
     const delta = deltaDe(t);
     saldo += delta;
+    const linea = unwrap<{ nombre: string; color: string | null }>(t.linea);
+    const origen = t.metodo_pago || t.destinatario_externo || t.comercio || null;
     return {
       id: t.id,
       fecha: t.fecha,
       descripcion: t.descripcion,
-      destinatarioOrigen: t.destinatario_externo || t.comercio || t.metodo_pago || "—",
+      origen,
+      origenColor: origen ? metodoColores.get(origen) ?? null : null,
+      lineaNombre: linea?.nombre ?? null,
+      lineaColor: linea?.color ?? null,
       notas: t.notas,
       delta,
       balance: saldo,
@@ -122,14 +133,10 @@ export default async function CuentaMadrePage() {
       tipo: t.tipo,
       linea_id: t.linea_id,
       metodo_pago: t.metodo_pago,
-      pagado: t.pagado ?? true,
-      fecha_pagado: t.fecha_pagado,
     };
   });
 
   const balanceActual = saldo;
-  const ingresos = rows.filter((r) => r.delta > 0).reduce((a, r) => a + r.delta, 0);
-  const egresos = rows.filter((r) => r.delta < 0).reduce((a, r) => a + Math.abs(r.delta), 0);
 
   return (
     <div className="space-y-6">
@@ -172,11 +179,9 @@ export default async function CuentaMadrePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-2 lg:max-w-md">
         <KPICard label="Balance actual" value={balanceActual} tone={balanceActual < 0 ? "danger" : "default"} />
         <KPICard label="Saldo inicial" value={Number(cuenta.saldo_inicial)} />
-        <KPICard label="Ingresos" value={ingresos} tone="success" />
-        <KPICard label="Egresos" value={egresos} tone="danger" />
       </div>
 
       {rows.length === 0 ? (

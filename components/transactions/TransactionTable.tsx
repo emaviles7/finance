@@ -53,6 +53,7 @@ import {
   actualizarEstadoPago,
 } from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
+import { ColorChip } from "@/components/shared/ColorChip";
 import { TransactionSheet } from "./TransactionSheet";
 import { type LineaOption } from "./TransactionForm";
 
@@ -67,8 +68,10 @@ export type TransaccionRow = {
   destinatario_externo: string | null;
   linea_id: string | null;
   linea_nombre: string | null;
+  linea_color: string | null;
   categoria_nombre: string | null;
   metodo_pago: string | null;
+  metodo_color: string | null;
   pagado: boolean;
   fecha_pagado: string | null;
   es_ajuste_saldo: boolean;
@@ -219,7 +222,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         header: "Método / Origen",
         cell: ({ row }) =>
           row.original.metodo_pago ? (
-            <span className="text-sm">{row.original.metodo_pago}</span>
+            <ColorChip label={row.original.metodo_pago} color={row.original.metodo_color} />
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
           ),
@@ -229,8 +232,8 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         header: "Línea presupuestaria",
         cell: ({ row }) =>
           row.original.linea_nombre ? (
-            <div className="text-sm">
-              <p>{row.original.linea_nombre}</p>
+            <div className="space-y-0.5">
+              <ColorChip label={row.original.linea_nombre} color={row.original.linea_color} />
               <p className="text-xs text-muted-foreground">{row.original.categoria_nombre}</p>
             </div>
           ) : (

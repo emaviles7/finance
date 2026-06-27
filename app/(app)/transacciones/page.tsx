@@ -25,14 +25,14 @@ export default async function TransaccionesPage() {
     await Promise.all([
       supabase
         .from("cuentas")
-        .select("id, nombre")
+        .select("id, nombre, color")
         .eq("familia_id", familiaId)
         .eq("es_cuenta_madre", true)
         .eq("activa", true)
         .maybeSingle(),
       supabase
         .from("metodos_pago")
-        .select("nombre")
+        .select("nombre, color")
         .eq("familia_id", familiaId)
         .eq("activa", true)
         .order("orden")
@@ -48,7 +48,7 @@ export default async function TransaccionesPage() {
         .select(
           `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
            linea_id, metodo_pago, pagado, fecha_pagado,
-           linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, categorias(nombre))`
+           linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, color, categorias(nombre))`
         )
         .eq("familia_id", familiaId)
         .order("fecha", { ascending: false })
@@ -65,6 +65,10 @@ export default async function TransaccionesPage() {
   }
 
   const metodosPagoOptions = (metodosPago ?? []).map((m) => m.nombre);
+  const metodoColores = new Map<string, string>();
+  for (const m of metodosPago ?? []) if (m.color) metodoColores.set(m.nombre, m.color);
+  if (cuentaMadre?.color && cuentaMadre?.nombre) metodoColores.set(cuentaMadre.nombre, cuentaMadre.color);
+
   const lineasOptions = (lineas ?? []).map((l) => ({
     id: l.id,
     nombre: l.nombre,
@@ -73,7 +77,7 @@ export default async function TransaccionesPage() {
   }));
 
   const rows: TransaccionRow[] = (transacciones ?? []).map((t) => {
-    const linea = unwrap<{ nombre: string; categorias: unknown }>(t.linea);
+    const linea = unwrap<{ nombre: string; color: string | null; categorias: unknown }>(t.linea);
     return {
       id: t.id,
       fecha: t.fecha,
@@ -85,8 +89,10 @@ export default async function TransaccionesPage() {
       destinatario_externo: t.destinatario_externo,
       linea_id: t.linea_id,
       linea_nombre: linea?.nombre ?? null,
+      linea_color: linea?.color ?? null,
       categoria_nombre: linea ? unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? null : null,
       metodo_pago: t.metodo_pago,
+      metodo_color: t.metodo_pago ? metodoColores.get(t.metodo_pago) ?? null : null,
       pagado: t.pagado ?? true,
       fecha_pagado: t.fecha_pagado,
       es_ajuste_saldo: t.es_ajuste_saldo ?? false,

@@ -85,6 +85,15 @@ export function PresupuestoGrid({
     return t;
   }
 
+  // Total del mes = suma de todas las líneas presupuestarias en ese mes.
+  function totalMes(mes: number) {
+    return lineas.reduce((acc, l) => {
+      const v = Number(valores.get(key(l.id, mes)) ?? 0);
+      return acc + (Number.isNaN(v) ? 0 : v);
+    }, 0);
+  }
+  const totalAnio = Array.from({ length: 12 }, (_, i) => i + 1).reduce((a, m) => a + totalMes(m), 0);
+
   // Agrupar líneas por categoría conservando el orden recibido.
   const porCategoria = useMemo(() => {
     const map = new Map<string, GridLinea[]>();
@@ -138,6 +147,15 @@ export function PresupuestoGrid({
                   totalLineaAnio={totalLineaAnio}
                 />
               ))}
+              <TableRow className="border-t-2 bg-muted/40 font-medium">
+                <TableCell className="sticky left-0 z-10 bg-muted/60">Total mensual</TableCell>
+                {MESES.map((m, i) => (
+                  <TableCell key={m} className="text-mono-amount text-right text-xs">
+                    {formatCurrency(totalMes(i + 1))}
+                  </TableCell>
+                ))}
+                <TableCell className="text-mono-amount text-right text-sm">{formatCurrency(totalAnio)}</TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </div>
