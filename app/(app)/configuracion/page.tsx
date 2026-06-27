@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { FamilySettingsForm } from "@/components/settings/FamilySettingsForm";
+import { CuentaMadreSettingsForm } from "@/components/settings/CuentaMadreSettingsForm";
 import { CategoryList } from "@/components/settings/CategoryList";
 import { MetodoPagoList } from "@/components/settings/MetodoPagoList";
 import { MembersList } from "@/components/settings/MembersList";
@@ -24,22 +25,30 @@ export default async function ConfiguracionPage() {
   const familia = unwrap<{ nombre: string; moneda: string }>(miembroActual?.familias);
   const esAdmin = miembroActual?.rol === "admin";
 
-  const [{ data: miembros }, { data: categorias }, { data: metodosPago }] = await Promise.all([
-    supabase.from("miembros").select("id, nombre, rol, user_id").eq("familia_id", familiaId),
-    supabase
-      .from("categorias")
-      .select("id, nombre, color, es_ingreso")
-      .eq("familia_id", familiaId)
-      .eq("activa", true)
-      .order("orden"),
-    supabase
-      .from("metodos_pago")
-      .select("id, nombre, color")
-      .eq("familia_id", familiaId)
-      .eq("activa", true)
-      .order("orden")
-      .order("nombre"),
-  ]);
+  const [{ data: miembros }, { data: categorias }, { data: metodosPago }, { data: cuentaMadre }] =
+    await Promise.all([
+      supabase.from("miembros").select("id, nombre, rol, user_id").eq("familia_id", familiaId),
+      supabase
+        .from("categorias")
+        .select("id, nombre, color, es_ingreso")
+        .eq("familia_id", familiaId)
+        .eq("activa", true)
+        .order("orden"),
+      supabase
+        .from("metodos_pago")
+        .select("id, nombre, color")
+        .eq("familia_id", familiaId)
+        .eq("activa", true)
+        .order("orden")
+        .order("nombre"),
+      supabase
+        .from("cuentas")
+        .select("id, nombre, color")
+        .eq("familia_id", familiaId)
+        .eq("es_cuenta_madre", true)
+        .eq("activa", true)
+        .maybeSingle(),
+    ]);
 
   return (
     <div className="space-y-6">
@@ -51,6 +60,14 @@ export default async function ConfiguracionPage() {
           monedaInicial={familia?.moneda ?? "USD"}
           esAdmin={esAdmin}
         />
+
+        {cuentaMadre && (
+          <CuentaMadreSettingsForm
+            nombreInicial={cuentaMadre.nombre}
+            colorInicial={cuentaMadre.color ?? "#7C3AED"}
+            esAdmin={esAdmin}
+          />
+        )}
 
         <MembersList miembros={miembros ?? []} esAdmin={esAdmin} miUserId={user!.id} />
 
