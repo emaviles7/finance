@@ -32,7 +32,6 @@ export async function ajustarBalanceLinea(lineaId: string, saldoDeseado: number)
   const hoy = new Date();
   const anio = hoy.getFullYear();
   const mes = hoy.getMonth() + 1;
-  const hastaHoy = (a: number, m: number) => a < anio || (a === anio && m <= mes);
 
   const { data: linea } = await supabase
     .from("lineas_presupuestarias")
@@ -43,20 +42,15 @@ export async function ajustarBalanceLinea(lineaId: string, saldoDeseado: number)
   if (!linea) throw new Error("Línea no encontrada");
 
   const [{ data: presu }, { data: ajustes }, { data: gastos }] = await Promise.all([
-    supabase.from("presupuestos").select("anio, mes, monto_presupuestado").eq("linea_id", lineaId).is("deleted_at", null),
-    supabase.from("ajustes_linea").select("anio, mes, monto").eq("linea_id", lineaId),
-    supabase.from("v_presupuesto_mes").select("anio, mes, total_gastado").eq("linea_id", lineaId),
+    supabase.from("presupuestos").select("monto_presupuestado").eq("linea_id", lineaId).is("deleted_at", null),
+    supabase.from("ajustes_linea").select("monto").eq("linea_id", lineaId),
+    supabase.from("v_presupuesto_mes").select("total_gastado").eq("linea_id", lineaId),
   ]);
 
-  const presuSum = (presu ?? [])
-    .filter((p) => hastaHoy(p.anio, p.mes))
-    .reduce((a, p) => a + Number(p.monto_presupuestado), 0);
-  const ajusteSum = (ajustes ?? [])
-    .filter((p) => hastaHoy(p.anio, p.mes))
-    .reduce((a, p) => a + Number(p.monto), 0);
-  const gastoSum = (gastos ?? [])
-    .filter((g) => hastaHoy(g.anio, g.mes))
-    .reduce((a, g) => a + Number(g.total_gastado), 0);
+  // Disponible = todo el historial (igual que el libro contable y la vista general).
+  const presuSum = (presu ?? []).reduce((a, p) => a + Number(p.monto_presupuestado), 0);
+  const ajusteSum = (ajustes ?? []).reduce((a, p) => a + Number(p.monto), 0);
+  const gastoSum = (gastos ?? []).reduce((a, g) => a + Number(g.total_gastado), 0);
   const disponible = presuSum + ajusteSum - gastoSum;
 
   const diferencia = Math.round((saldoDeseado - disponible) * 100) / 100;

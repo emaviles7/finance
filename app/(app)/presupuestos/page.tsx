@@ -68,21 +68,20 @@ export default async function PresupuestosPage() {
     categoria_nombre: unwrap(l.categorias)?.nombre ?? "Sin categoría",
   }));
 
-  // ¿El periodo (anio, mes) es <= al mes actual? (dato "a la fecha")
-  const hastaHoy = (a: number, m: number) => a < anio || (a === anio && m <= mes);
-
-  // Disponible global por línea a la fecha = Σ presupuesto asignado (meses ≤ hoy)
-  // − Σ gastado (meses ≤ hoy). En el modelo acumulado las transferencias entre
-  // líneas ya están reflejadas en el presupuesto neto.
+  // Disponible global por línea = Σ presupuesto asignado + Σ ajustes − Σ gastado,
+  // sobre TODO el historial (idéntico al balance final del libro contable de la
+  // línea). Las transferencias entre líneas ya están reflejadas en el
+  // presupuesto neto. Sumar todos los meses garantiza que la vista general y el
+  // libro contable muestren siempre el mismo balance.
   function disponibleLinea(lineaId: string) {
     const presupuesto = (presupuestosHist ?? [])
-      .filter((p) => p.linea_id === lineaId && hastaHoy(p.anio, p.mes))
+      .filter((p) => p.linea_id === lineaId)
       .reduce((a, p) => a + Number(p.monto_presupuestado), 0);
     const ajustes = (ajustesHist ?? [])
-      .filter((p) => p.linea_id === lineaId && hastaHoy(p.anio, p.mes))
+      .filter((p) => p.linea_id === lineaId)
       .reduce((a, p) => a + Number(p.monto), 0);
     const gastado = (gastosHist ?? [])
-      .filter((g) => g.linea_id === lineaId && hastaHoy(g.anio, g.mes))
+      .filter((g) => g.linea_id === lineaId)
       .reduce((a, g) => a + Number(g.total_gastado), 0);
     return presupuesto + ajustes - gastado;
   }
@@ -117,7 +116,7 @@ export default async function PresupuestosPage() {
 
       {/* Vista general: disponible global por línea, dividido por categorías, a la fecha. */}
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">Vista general · disponible a la fecha</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">Vista general · disponible por línea</h2>
         {lineasConCategoria.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
