@@ -142,11 +142,12 @@ export default async function CuentaMadrePage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <AjustarSaldoDialog saldoActual={balanceActual} />
+          <AjustarSaldoDialog saldoActual={balanceActual} saldoInicial={Number(cuenta.saldo_inicial)} />
           <TransactionSheet
             metodosPago={metodosPagoOptions}
             lineas={lineasOptions}
             cuentaMadreId={cuenta.id}
+            cuentaMadreNombre={cuenta.nombre}
             defaultValues={{ tipo: "ingreso" }}
             trigger={
               <Button variant="outline">
@@ -159,7 +160,8 @@ export default async function CuentaMadrePage() {
             metodosPago={metodosPagoOptions}
             lineas={lineasOptions}
             cuentaMadreId={cuenta.id}
-            defaultValues={{ tipo: "egreso" }}
+            cuentaMadreNombre={cuenta.nombre}
+            defaultValues={{ tipo: "egreso", metodo_pago: cuenta.nombre }}
             trigger={
               <Button>
                 <ArrowUpCircle className="size-4" />
@@ -189,6 +191,7 @@ export default async function CuentaMadrePage() {
           metodosPago={metodosPagoOptions}
           lineas={lineasOptions}
           cuentaMadreId={cuenta.id}
+          cuentaMadreNombre={cuenta.nombre}
         />
       )}
     </div>

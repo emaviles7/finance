@@ -43,11 +43,13 @@ export function CuentaMadreLedger({
   metodosPago,
   lineas,
   cuentaMadreId,
+  cuentaMadreNombre,
 }: {
   rows: LedgerRow[];
   metodosPago: string[];
   lineas: LineaOption[];
   cuentaMadreId: string;
+  cuentaMadreNombre?: string;
 }) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -108,6 +110,7 @@ export function CuentaMadreLedger({
                       metodosPago={metodosPago}
                       lineas={lineas}
                       cuentaMadreId={cuentaMadreId}
+                      cuentaMadreNombre={cuentaMadreNombre}
                       defaultValues={{
                         fecha: f.fecha,
                         descripcion: f.descripcion,

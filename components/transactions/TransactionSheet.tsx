@@ -21,6 +21,7 @@ interface TransactionSheetProps {
   metodosPago: string[];
   lineas: LineaOption[];
   cuentaMadreId: string;
+  cuentaMadreNombre?: string;
   mode?: "create" | "edit";
   transaccionId?: string;
   defaultValues?: Partial<TransaccionFormInput>;
@@ -31,6 +32,7 @@ export function TransactionSheet({
   metodosPago,
   lineas,
   cuentaMadreId,
+  cuentaMadreNombre,
   mode = "create",
   transaccionId,
   defaultValues,
@@ -86,6 +88,7 @@ export function TransactionSheet({
           metodosPago={metodosPago}
           lineas={lineas}
           cuentaMadreId={cuentaMadreId}
+          cuentaMadreNombre={cuentaMadreNombre}
           defaultValues={defaultValues}
           submitting={submitting}
           onSubmit={handleSubmit}

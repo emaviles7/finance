@@ -75,6 +75,7 @@ interface TransactionTableProps {
   metodosPago: string[];
   lineas: LineaOption[];
   cuentaMadreId: string;
+  cuentaMadreNombre?: string;
 }
 
 const TIPO_BADGE: Record<TransaccionRow["tipo"], { label: string; className: string }> = {
@@ -93,7 +94,7 @@ const FILTROS_INICIALES = {
   fechaFin: "",
 };
 
-export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: TransactionTableProps) {
+export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cuentaMadreNombre }: TransactionTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState(FILTROS_INICIALES.search);
   const [tipoFiltro, setTipoFiltro] = useState<string>(FILTROS_INICIALES.tipoFiltro);
@@ -243,6 +244,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: T
               metodosPago={metodosPago}
               lineas={lineas}
               cuentaMadreId={cuentaMadreId}
+              cuentaMadreNombre={cuentaMadreNombre}
               defaultValues={{
                 fecha: row.original.fecha,
                 descripcion: row.original.descripcion,
@@ -267,7 +269,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId }: T
         ),
       },
     ],
-    [metodosPago, lineas, cuentaMadreId]
+    [metodosPago, lineas, cuentaMadreId, cuentaMadreNombre]
   );
 
   const table = useReactTable({

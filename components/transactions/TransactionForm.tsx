@@ -30,11 +30,13 @@ const TIPO_LABELS: Record<string, string> = {
 };
 
 interface TransactionFormProps {
-  /** Sugerencias de método de pago / origen (lista guardada). Se permite texto libre. */
+  /** Opciones de método de pago / origen (lista guardada en Configuración). */
   metodosPago: string[];
   lineas: LineaOption[];
   /** Cuenta Madre: todas las transacciones se contabilizan contra ella (bolsa única). */
   cuentaMadreId: string;
+  /** Nombre de la Cuenta Madre; se ofrece como origen por defecto en egresos. */
+  cuentaMadreNombre?: string;
   defaultValues?: Partial<TransaccionFormInput>;
   submitting?: boolean;
   onSubmit: (values: TransaccionInput) => Promise<void>;
@@ -45,6 +47,7 @@ export function TransactionForm({
   metodosPago,
   lineas,
   cuentaMadreId,
+  cuentaMadreNombre,
   defaultValues,
   submitting,
   onSubmit,
@@ -81,9 +84,14 @@ export function TransactionForm({
   // solo para esa transacción, no se guarda en la lista).
   const OTROS = "__otros__";
   const NINGUNO = "__none__";
+  // La Cuenta Madre se ofrece como un origen/método más (default en egresos).
+  const opcionesMetodo =
+    cuentaMadreNombre && !metodosPago.includes(cuentaMadreNombre)
+      ? [cuentaMadreNombre, ...metodosPago]
+      : metodosPago;
   const metodoPagoValue = watch("metodo_pago") ?? "";
   const [modoOtro, setModoOtro] = useState(
-    () => !!metodoPagoValue && !metodosPago.includes(metodoPagoValue)
+    () => !!metodoPagoValue && !opcionesMetodo.includes(metodoPagoValue)
   );
   const metodoSelectValue = modoOtro ? OTROS : metodoPagoValue === "" ? NINGUNO : metodoPagoValue;
 
@@ -165,7 +173,7 @@ export function TransactionForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NINGUNO}>(Ninguno)</SelectItem>
-            {metodosPago.map((m) => (
+            {opcionesMetodo.map((m) => (
               <SelectItem key={m} value={m}>
                 {m}
               </SelectItem>

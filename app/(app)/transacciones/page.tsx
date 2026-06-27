@@ -25,7 +25,7 @@ export default async function TransaccionesPage() {
     await Promise.all([
       supabase
         .from("cuentas")
-        .select("id")
+        .select("id, nombre")
         .eq("familia_id", familiaId)
         .eq("es_cuenta_madre", true)
         .eq("activa", true)
@@ -57,6 +57,7 @@ export default async function TransaccionesPage() {
     ]);
 
   const cuentaMadreId = cuentaMadre?.id ?? "";
+  const cuentaMadreNombre = cuentaMadre?.nombre ?? undefined;
 
   function unwrap<T>(rel: unknown): T | null {
     if (!rel) return null;
@@ -113,6 +114,7 @@ export default async function TransaccionesPage() {
                 metodosPago={metodosPagoOptions}
                 lineas={lineasOptions}
                 cuentaMadreId={cuentaMadreId}
+                cuentaMadreNombre={cuentaMadreNombre}
                 defaultValues={{ tipo: "ingreso" }}
                 trigger={
                   <Button variant="outline">
@@ -125,6 +127,7 @@ export default async function TransaccionesPage() {
                 metodosPago={metodosPagoOptions}
                 lineas={lineasOptions}
                 cuentaMadreId={cuentaMadreId}
+                cuentaMadreNombre={cuentaMadreNombre}
                 defaultValues={{ tipo: "egreso" }}
                 trigger={
                   <Button>
@@ -154,6 +157,7 @@ export default async function TransaccionesPage() {
         metodosPago={metodosPagoOptions}
         lineas={lineasOptions}
         cuentaMadreId={cuentaMadreId}
+        cuentaMadreNombre={cuentaMadreNombre}
       />
     </div>
   );

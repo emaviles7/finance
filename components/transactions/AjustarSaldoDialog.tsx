@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -16,21 +15,52 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SlidersHorizontalIcon } from "lucide-react";
-import { ajustarSaldoCuentaMadre } from "@/lib/actions/cuentas";
+import { ajustarSaldoCuentaMadre, actualizarSaldoInicialCuentaMadre } from "@/lib/actions/cuentas";
 
-export function AjustarSaldoDialog({ saldoActual }: { saldoActual: number }) {
+export function AjustarSaldoDialog({
+  saldoActual,
+  saldoInicial,
+}: {
+  saldoActual: number;
+  saldoInicial: number;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [valor, setValor] = useState(String(saldoActual));
-  const [submitting, setSubmitting] = useState(false);
+  const [valorInicial, setValorInicial] = useState(String(saldoInicial));
+  const [valorActual, setValorActual] = useState(String(saldoActual));
+  const [submitting, setSubmitting] = useState<"inicial" | "actual" | null>(null);
 
-  async function handleGuardar() {
-    const num = Number(valor);
+  function reset() {
+    setValorInicial(String(saldoInicial));
+    setValorActual(String(saldoActual));
+  }
+
+  async function guardarInicial() {
+    const num = Number(valorInicial);
     if (Number.isNaN(num)) {
       toast.error("Monto inválido");
       return;
     }
-    setSubmitting(true);
+    setSubmitting("inicial");
+    try {
+      await actualizarSaldoInicialCuentaMadre(num);
+      toast.success("Saldo inicial actualizado");
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al guardar");
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function guardarActual() {
+    const num = Number(valorActual);
+    if (Number.isNaN(num)) {
+      toast.error("Monto inválido");
+      return;
+    }
+    setSubmitting("actual");
     try {
       await ajustarSaldoCuentaMadre(num);
       toast.success("Saldo ajustado");
@@ -39,7 +69,7 @@ export function AjustarSaldoDialog({ saldoActual }: { saldoActual: number }) {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al ajustar");
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
     }
   }
 
@@ -47,7 +77,7 @@ export function AjustarSaldoDialog({ saldoActual }: { saldoActual: number }) {
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (o) setValor(String(saldoActual));
+        if (o) reset();
         setOpen(o);
       }}
     >
@@ -63,28 +93,52 @@ export function AjustarSaldoDialog({ saldoActual }: { saldoActual: number }) {
         <DialogHeader>
           <DialogTitle>Ajustar saldo de la Cuenta Madre</DialogTitle>
           <DialogDescription>
-            Escribe el saldo actual real (por ejemplo, el que traes de tu Excel). Se registrará una
-            transacción de &quot;Ajuste de saldo&quot; por la diferencia; no se modifica el historial existente.
+            Edita el saldo inicial (de arranque) o registra un ajuste para que el saldo actual
+            coincida con tu valor real. Ninguna de las dos opciones modifica el historial existente.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2 p-4">
-          <Label htmlFor="ajuste-saldo-monto">Nuevo saldo actual</Label>
-          <Input
-            id="ajuste-saldo-monto"
-            type="number"
-            step="0.01"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-          />
+
+        <div className="space-y-5 p-4">
+          <div className="space-y-2">
+            <Label htmlFor="ajuste-saldo-inicial">Saldo inicial</Label>
+            <p className="text-xs text-muted-foreground">
+              Saldo de arranque del libro (antes de cualquier movimiento). Cambiarlo desplaza todo el
+              balance; no genera ninguna transacción.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                id="ajuste-saldo-inicial"
+                type="number"
+                step="0.01"
+                value={valorInicial}
+                onChange={(e) => setValorInicial(e.target.value)}
+              />
+              <Button onClick={guardarInicial} disabled={submitting !== null}>
+                {submitting === "inicial" ? "..." : "Guardar"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2 border-t pt-4">
+            <Label htmlFor="ajuste-saldo-actual">Saldo actual</Label>
+            <p className="text-xs text-muted-foreground">
+              Registra una transacción de &quot;Ajuste de saldo&quot; por la diferencia para que el
+              balance actual quede en este valor.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                id="ajuste-saldo-actual"
+                type="number"
+                step="0.01"
+                value={valorActual}
+                onChange={(e) => setValorActual(e.target.value)}
+              />
+              <Button onClick={guardarActual} disabled={submitting !== null}>
+                {submitting === "actual" ? "..." : "Ajustar"}
+              </Button>
+            </div>
+          </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancelar
-          </Button>
-          <Button onClick={handleGuardar} disabled={submitting}>
-            {submitting ? "Guardando..." : "Guardar ajuste"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

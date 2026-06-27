@@ -199,6 +199,37 @@ export async function ajustarSaldoCuentaMadre(saldoDeseado: number) {
   revalidatePath("/cuentas");
 }
 
+/**
+ * Cambia directamente el SALDO INICIAL (saldo de arranque del libro) de la
+ * Cuenta Madre. No crea movimientos: desplaza todo el balance por igual. Útil
+ * al configurar la cuenta por primera vez. El saldo actual se recalcula a
+ * partir del nuevo inicial + el ledger existente.
+ */
+export async function actualizarSaldoInicialCuentaMadre(nuevoSaldoInicial: number) {
+  const { supabase, familiaId } = await getFamiliaId();
+
+  const { data: cuenta } = await supabase
+    .from("cuentas")
+    .select("id")
+    .eq("familia_id", familiaId)
+    .eq("es_cuenta_madre", true)
+    .eq("activa", true)
+    .maybeSingle();
+  if (!cuenta) throw new Error("No hay una Cuenta Madre designada.");
+
+  const { error } = await supabase
+    .from("cuentas")
+    .update({ saldo_inicial: nuevoSaldoInicial })
+    .eq("id", cuenta.id);
+  if (error) throw new Error(error.message);
+
+  await supabase.rpc("fn_recalcular_saldo_cuenta", { p_cuenta_id: cuenta.id });
+  revalidatePath("/cuenta-madre");
+  revalidatePath("/transacciones");
+  revalidatePath("/dashboard");
+  revalidatePath("/cuentas");
+}
+
 export async function eliminarCuenta(id: string) {
   const { supabase, userId } = await getFamiliaId();
   const { error } = await supabase
