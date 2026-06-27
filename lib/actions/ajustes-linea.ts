@@ -70,30 +70,3 @@ export async function ajustarBalanceLinea(lineaId: string, saldoDeseado: number)
   revalidatePath("/presupuestos");
   revalidatePath(`/presupuestos/${lineaId}`);
 }
-
-export async function eliminarAjusteLinea(id: string) {
-  const { supabase, familiaId } = await getFamiliaId();
-  const { data: ajuste } = await supabase
-    .from("ajustes_linea")
-    .select("*")
-    .eq("id", id)
-    .eq("familia_id", familiaId)
-    .maybeSingle();
-  if (!ajuste) throw new Error("Ajuste no encontrado");
-
-  const { error } = await supabase.from("ajustes_linea").delete().eq("id", id);
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/presupuestos");
-  revalidatePath(`/presupuestos/${ajuste.linea_id}`);
-  return ajuste;
-}
-
-export async function restaurarAjusteLinea(ajuste: Record<string, unknown>) {
-  const { supabase } = await getFamiliaId();
-  const { error } = await supabase.from("ajustes_linea").insert(ajuste);
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/presupuestos");
-  revalidatePath(`/presupuestos/${ajuste.linea_id}`);
-}

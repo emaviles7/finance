@@ -14,26 +14,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trash2Icon, PencilIcon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import { eliminarLinea, restaurarLinea } from "@/lib/actions/lineas-presupuestarias";
 import { ajustarBalanceLinea } from "@/lib/actions/ajustes-linea";
 import { showUndoToast } from "@/lib/utils/undo-toast";
-import { LineaSheet, type CategoriaOption } from "@/components/budgets/LineaSheet";
 
 export function LineaAcciones({
   lineaId,
   nombre,
   disponibleActual,
-  categorias,
-  categoriaId,
-  color,
 }: {
   lineaId: string;
   nombre: string;
   disponibleActual: number;
-  categorias: CategoriaOption[];
-  categoriaId: string;
-  color: string;
 }) {
   const router = useRouter();
   const [ajustarOpen, setAjustarOpen] = useState(false);
@@ -90,17 +83,6 @@ export function LineaAcciones({
       >
         Ajustar
       </Button>
-      <LineaSheet
-        mode="edit"
-        lineaId={lineaId}
-        categorias={categorias}
-        defaultValues={{ nombre, categoria_id: categoriaId, color }}
-        trigger={
-          <Button variant="ghost" size="icon-sm" title={`Editar línea ${nombre}`}>
-            <PencilIcon className="size-4" />
-          </Button>
-        }
-      />
       <Button
         variant="ghost"
         size="icon-sm"

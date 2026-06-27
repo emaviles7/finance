@@ -178,7 +178,6 @@ export async function eliminarTransaccion(id: string) {
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
   revalidatePath("/presupuestos");
-  if (tx.linea_id) revalidatePath(`/presupuestos/${tx.linea_id}`);
 
   return tx;
 }
@@ -200,7 +199,6 @@ export async function restaurarTransaccion(tx: Record<string, unknown>) {
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
   revalidatePath("/presupuestos");
-  if (tx.linea_id) revalidatePath(`/presupuestos/${tx.linea_id}`);
 }
 
 async function recalcularSaldosCuentas(cuentaOrigenId: string | null, cuentaDestinoId: string | null) {

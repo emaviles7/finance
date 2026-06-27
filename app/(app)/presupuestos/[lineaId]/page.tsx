@@ -4,8 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { AuditTrail } from "@/components/shared/AuditTrail";
 import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
-import { LineaSheet } from "@/components/budgets/LineaSheet";
-import { LedgerRowActions } from "@/components/budgets/LedgerRowActions";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -16,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ArrowLeftIcon, PencilIcon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/dates";
 import { format } from "date-fns";
@@ -28,8 +26,6 @@ function unwrap<T>(rel: unknown): T | null {
 }
 
 type LedgerRow = {
-  id: string | null;
-  tipo: string | null;
   fecha: string;
   descripcion: string;
   delta: number;
@@ -58,7 +54,7 @@ export default async function LineaDetallePage({
 
   const { data: linea } = await supabase
     .from("lineas_presupuestarias")
-    .select("id, nombre, color, categoria_id, categorias(nombre)")
+    .select("id, nombre, color, categorias(nombre)")
     .eq("id", lineaId)
     .maybeSingle();
 
@@ -66,7 +62,7 @@ export default async function LineaDetallePage({
 
   const hoy = new Date();
 
-  const [{ data: lineas }, { data: presupuestos }, { data: historial }, { data: categorias }] = await Promise.all([
+  const [{ data: lineas }, { data: presupuestos }, { data: historial }] = await Promise.all([
     supabase
       .from("lineas_presupuestarias")
       .select("id, nombre, categorias(nombre)")
@@ -81,15 +77,8 @@ export default async function LineaDetallePage({
     // Egresos + transferencias entre líneas (entrada/salida), con delta ya firmado.
     supabase
       .from("v_historial_linea")
-      .select("id, fecha, descripcion, tipo, delta, created_at")
+      .select("fecha, descripcion, tipo, delta, created_at")
       .eq("linea_id", lineaId),
-    supabase
-      .from("categorias")
-      .select("id, nombre")
-      .eq("familia_id", familiaId)
-      .eq("es_ingreso", false)
-      .eq("activa", true)
-      .order("orden"),
   ]);
 
   const categoriaNombre = unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? "Sin categoría";
@@ -118,8 +107,6 @@ export default async function LineaDetallePage({
       transferNetByMonth.set(key, (transferNetByMonth.get(key) ?? 0) + delta);
     }
     movimientos.push({
-      id: h.id,
-      tipo: h.tipo,
       fecha: h.fecha,
       descripcion: h.descripcion ?? "Movimiento",
       delta,
@@ -136,8 +123,6 @@ export default async function LineaDetallePage({
     if (base === 0) continue;
     const fecha = `${anio}-${String(mes).padStart(2, "0")}-01`;
     filasPresupuesto.push({
-      id: null,
-      tipo: null,
       fecha,
       descripcion: `Presupuesto ${format(new Date(anio, mes - 1, 1), "MMMM yyyy", { locale: es })}`,
       delta: base,
@@ -185,17 +170,6 @@ export default async function LineaDetallePage({
             mes={hoy.getMonth() + 1}
             defaultOrigenId={linea.id}
           />
-          <LineaSheet
-            mode="edit"
-            lineaId={linea.id}
-            categorias={categorias ?? []}
-            defaultValues={{ nombre: linea.nombre, categoria_id: linea.categoria_id ?? "", color: linea.color ?? "#7C3AED" }}
-            trigger={
-              <Button variant="ghost" size="icon-sm" title={`Editar línea ${linea.nombre}`}>
-                <PencilIcon className="size-4" />
-              </Button>
-            }
-          />
           <AuditTrail tabla="lineas_presupuestarias" registroId={linea.id} />
         </div>
       </div>
@@ -222,7 +196,6 @@ export default async function LineaDetallePage({
                   <TableHead className="text-right">Ingreso</TableHead>
                   <TableHead className="text-right">Egreso</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -238,14 +211,6 @@ export default async function LineaDetallePage({
                     </TableCell>
                     <TableCell className="text-mono-amount text-right font-medium">
                       {formatCurrency(f.balance)}
-                    </TableCell>
-                    <TableCell>
-                      {f.id && f.tipo === "ajuste_linea" && (
-                        <LedgerRowActions kind="ajuste_linea" id={f.id} />
-                      )}
-                      {f.id && (f.tipo === "egreso" || f.tipo === "transferencia_externa") && (
-                        <LedgerRowActions kind="transaccion" id={f.id} />
-                      )}
                     </TableCell>
                   </TableRow>
                 ))}

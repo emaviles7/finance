@@ -47,35 +47,6 @@ export async function guardarPresupuesto(input: PresupuestoInput) {
   revalidatePath("/reportes");
 }
 
-export async function guardarPresupuestosBatch(items: PresupuestoInput[]) {
-  if (items.length === 0) return;
-  const parsedItems = items.map((i) => presupuestoSchema.parse(i));
-  const { supabase, familiaId, userId } = await getFamiliaId();
-
-  const rows = parsedItems.map((p) => ({
-    familia_id: familiaId,
-    linea_id: p.linea_id,
-    anio: p.anio,
-    mes: p.mes,
-    monto_presupuestado: p.monto_presupuestado,
-    rollover: p.rollover,
-    created_by: userId,
-    deleted_at: null,
-    deleted_by: null,
-  }));
-
-  const { error } = await supabase
-    .from("presupuestos")
-    .upsert(rows, { onConflict: "familia_id,linea_id,anio,mes" });
-
-  if (error) throw new Error(error.message);
-
-  await supabase.rpc("fn_refresh_presupuesto_mes");
-  revalidatePath("/presupuestos");
-  revalidatePath("/dashboard");
-  revalidatePath("/reportes");
-}
-
 export async function eliminarPresupuesto(id: string) {
   const { supabase, userId } = await getFamiliaId();
   const { error } = await supabase

@@ -15,8 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils/currency";
-import { guardarPresupuestosBatch } from "@/lib/actions/presupuestos";
-import type { PresupuestoInput } from "@/lib/validations/budget.schema";
+import { guardarPresupuesto } from "@/lib/actions/presupuestos";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -34,7 +33,7 @@ export function PresupuestoGrid({
 }) {
   const router = useRouter();
   const [anio, setAnio] = useState(anioInicial);
-  const [guardando, setGuardando] = useState(false);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
 
   // Valor original por celda (para detectar cambios) y valor editable.
   const original = useMemo(() => {
@@ -49,57 +48,31 @@ export function PresupuestoGrid({
     return m;
   });
 
-  // Celdas con cambios sin guardar, a través de TODOS los años (no solo el
-  // visible) para que cambiar de año nunca pierda ediciones pendientes.
-  const [dirty, setDirty] = useState<Map<string, { lineaId: string; anio: number; mes: number }>>(new Map());
-
   const key = (lineaId: string, mes: number) => `${anio}:${lineaId}:${mes}`;
 
   function setValor(lineaId: string, mes: number, valor: string) {
-    const k = key(lineaId, mes);
-    setValores((prev) => new Map(prev).set(k, valor));
-    setDirty((prev) => {
-      const next = new Map(prev);
-      const raw = valor.trim();
-      const num = Number(raw);
-      const sinCambios = raw !== "" && !Number.isNaN(num) && num === (original.get(k) ?? null);
-      if (raw === "" || sinCambios) {
-        next.delete(k);
-      } else {
-        next.set(k, { lineaId, anio, mes });
-      }
-      return next;
-    });
+    setValores((prev) => new Map(prev).set(key(lineaId, mes), valor));
   }
 
-  async function guardarTodo() {
-    if (dirty.size === 0) return;
-    const items: PresupuestoInput[] = [];
-    for (const [k, { lineaId, anio: a, mes }] of dirty.entries()) {
-      const raw = (valores.get(k) ?? "").trim();
-      if (raw === "") continue;
-      const num = Number(raw);
-      if (Number.isNaN(num) || num < 0) {
-        toast.error("Hay un monto inválido sin guardar");
-        return;
-      }
-      items.push({ linea_id: lineaId, anio: a, mes, monto_presupuestado: num, rollover: true });
+  async function guardarCelda(lineaId: string, mes: number) {
+    const k = key(lineaId, mes);
+    const raw = (valores.get(k) ?? "").trim();
+    if (raw === "") return; // vacío: no se guarda (escribe 0 para poner a cero)
+    const num = Number(raw);
+    if (Number.isNaN(num) || num < 0) {
+      toast.error("Monto inválido");
+      return;
     }
-    setGuardando(true);
+    if (num === (original.get(k) ?? null)) return; // sin cambios
+    setSavingKey(k);
     try {
-      await guardarPresupuestosBatch(items);
-      for (const k of dirty.keys()) {
-        const raw = (valores.get(k) ?? "").trim();
-        if (raw === "") continue;
-        original.set(k, Number(raw));
-      }
-      setDirty(new Map());
-      toast.success("Presupuesto guardado");
+      await guardarPresupuesto({ linea_id: lineaId, anio, mes, monto_presupuestado: num, rollover: true });
+      original.set(k, num);
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al guardar");
     } finally {
-      setGuardando(false);
+      setSavingKey(null);
     }
   }
 
@@ -139,13 +112,8 @@ export function PresupuestoGrid({
           <ChevronRight className="size-4" />
         </Button>
         <span className="ml-2 text-xs text-muted-foreground">
-          {dirty.size > 0
-            ? `${dirty.size} cambio${dirty.size === 1 ? "" : "s"} sin guardar (todos los años)`
-            : "Escribe el presupuesto de cada mes."}
+          Escribe el presupuesto de cada mes; se guarda al salir de la celda.
         </span>
-        <Button className="ml-auto" onClick={guardarTodo} disabled={dirty.size === 0 || guardando}>
-          {guardando ? "Guardando..." : "Guardar cambios"}
-        </Button>
       </div>
 
       {lineas.length === 0 ? (
@@ -174,8 +142,8 @@ export function PresupuestoGrid({
                   valores={valores}
                   keyFn={key}
                   setValor={setValor}
-                  dirty={dirty}
-                  guardando={guardando}
+                  guardarCelda={guardarCelda}
+                  savingKey={savingKey}
                   totalLineaAnio={totalLineaAnio}
                 />
               ))}
@@ -202,8 +170,8 @@ function FragmentCategoria({
   valores,
   keyFn,
   setValor,
-  dirty,
-  guardando,
+  guardarCelda,
+  savingKey,
   totalLineaAnio,
 }: {
   categoria: string;
@@ -212,8 +180,8 @@ function FragmentCategoria({
   valores: Map<string, string>;
   keyFn: (lineaId: string, mes: number) => string;
   setValor: (lineaId: string, mes: number, valor: string) => void;
-  dirty: Map<string, { lineaId: string; anio: number; mes: number }>;
-  guardando: boolean;
+  guardarCelda: (lineaId: string, mes: number) => void;
+  savingKey: string | null;
   totalLineaAnio: (lineaId: string) => number;
 }) {
   return (
@@ -233,7 +201,6 @@ function FragmentCategoria({
           </TableCell>
           {Array.from({ length: 12 }, (_, i) => i + 1).map((mes) => {
             const k = keyFn(l.id, mes);
-            const esDirty = dirty.has(k);
             return (
               <TableCell key={mes} className="p-1">
                 <Input
@@ -243,11 +210,9 @@ function FragmentCategoria({
                   inputMode="decimal"
                   value={valores.get(k) ?? ""}
                   onChange={(e) => setValor(l.id, mes, e.target.value)}
-                  disabled={guardando}
-                  className={
-                    "h-8 w-20 text-right text-xs" +
-                    (esDirty ? " border-accent-warning bg-accent-warning/10" : "")
-                  }
+                  onBlur={() => guardarCelda(l.id, mes)}
+                  disabled={savingKey === k}
+                  className="h-8 w-20 text-right text-xs"
                 />
               </TableCell>
             );

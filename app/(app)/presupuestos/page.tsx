@@ -65,7 +65,6 @@ export default async function PresupuestosPage() {
     id: l.id,
     nombre: l.nombre,
     color: l.color ?? "#7C3AED",
-    categoria_id: l.categoria_id,
     categoria_nombre: unwrap(l.categorias)?.nombre ?? "Sin categoría",
   }));
 
@@ -164,14 +163,7 @@ export default async function PresupuestosPage() {
                               >
                                 {formatCurrency(disp)}
                               </span>
-                              <LineaAcciones
-                                lineaId={l.id}
-                                nombre={l.nombre}
-                                disponibleActual={disp}
-                                categorias={categorias ?? []}
-                                categoriaId={l.categoria_id}
-                                color={l.color}
-                              />
+                              <LineaAcciones lineaId={l.id} nombre={l.nombre} disponibleActual={disp} />
                             </div>
                           </li>
                         );

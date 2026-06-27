@@ -223,34 +223,6 @@ export async function actualizarSaldoInicialCuentaMadre(nuevoSaldoInicial: numbe
   revalidatePath("/cuentas");
 }
 
-export async function actualizarNombreColorCuentaMadre(nombre: string, color: string) {
-  const nombreLimpio = nombre.trim();
-  if (!nombreLimpio) throw new Error("El nombre no puede estar vacío");
-  if (!/^#[0-9A-Fa-f]{6}$/.test(color)) throw new Error("Color inválido");
-
-  const { supabase, familiaId } = await getFamiliaId();
-  const { data: cuenta } = await supabase
-    .from("cuentas")
-    .select("id")
-    .eq("familia_id", familiaId)
-    .eq("es_cuenta_madre", true)
-    .eq("activa", true)
-    .maybeSingle();
-  if (!cuenta) throw new Error("No hay una Cuenta Madre designada.");
-
-  const { error } = await supabase
-    .from("cuentas")
-    .update({ nombre: nombreLimpio, color })
-    .eq("id", cuenta.id);
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/configuracion");
-  revalidatePath("/transacciones");
-  revalidatePath("/cuenta-madre");
-  revalidatePath("/dashboard");
-  revalidatePath("/cuentas");
-}
-
 export async function eliminarCuenta(id: string) {
   const { supabase, userId } = await getFamiliaId();
   const { error } = await supabase

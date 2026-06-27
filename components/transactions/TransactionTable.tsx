@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -97,7 +97,6 @@ const FILTROS_INICIALES = {
   tipoFiltro: "todos",
   metodoFiltro: "todos",
   lineaFiltro: "todas",
-  estadoFiltro: "todos",
   fechaInicio: "",
   fechaFin: "",
 };
@@ -108,16 +107,11 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
   const [tipoFiltro, setTipoFiltro] = useState<string>(FILTROS_INICIALES.tipoFiltro);
   const [metodoFiltro, setMetodoFiltro] = useState<string>(FILTROS_INICIALES.metodoFiltro);
   const [lineaFiltro, setLineaFiltro] = useState<string>(FILTROS_INICIALES.lineaFiltro);
-  const [estadoFiltro, setEstadoFiltro] = useState<string>(FILTROS_INICIALES.estadoFiltro);
   const [fechaInicio, setFechaInicio] = useState(FILTROS_INICIALES.fechaInicio);
   const [fechaFin, setFechaFin] = useState(FILTROS_INICIALES.fechaFin);
   const [orden, setOrden] = useState<"desc" | "asc">("desc");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  // Selección estilo Excel sobre la columna "Monto".
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [anchorId, setAnchorId] = useState<string | null>(null);
 
   // Estado de pago editable desde la tabla (optimista para respuesta inmediata).
   const [pagoOverrides, setPagoOverrides] = useState<Map<string, { pagado: boolean; fecha_pagado: string | null }>>(
@@ -162,7 +156,6 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     tipoFiltro !== "todos" ||
     metodoFiltro !== "todos" ||
     lineaFiltro !== "todas" ||
-    estadoFiltro !== "todos" ||
     fechaInicio !== "" ||
     fechaFin !== "";
 
@@ -171,7 +164,6 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     setTipoFiltro(FILTROS_INICIALES.tipoFiltro);
     setMetodoFiltro(FILTROS_INICIALES.metodoFiltro);
     setLineaFiltro(FILTROS_INICIALES.lineaFiltro);
-    setEstadoFiltro(FILTROS_INICIALES.estadoFiltro);
     setFechaInicio(FILTROS_INICIALES.fechaInicio);
     setFechaFin(FILTROS_INICIALES.fechaFin);
   }
@@ -181,11 +173,6 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
       if (tipoFiltro !== "todos" && t.tipo !== tipoFiltro) return false;
       if (metodoFiltro !== "todos" && (t.metodo_pago ?? "") !== metodoFiltro) return false;
       if (lineaFiltro !== "todas" && t.linea_id !== lineaFiltro) return false;
-      if (estadoFiltro !== "todos") {
-        const pagado = getPago(t).pagado;
-        if (estadoFiltro === "pagado" && !pagado) return false;
-        if (estadoFiltro === "pendiente" && pagado) return false;
-      }
       if (fechaInicio && t.fecha < fechaInicio) return false;
       if (fechaFin && t.fecha > fechaFin) return false;
       if (search.trim()) {
@@ -203,70 +190,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     return resultado.sort((a, b) =>
       orden === "desc" ? b.fecha.localeCompare(a.fecha) : a.fecha.localeCompare(b.fecha)
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, search, tipoFiltro, metodoFiltro, lineaFiltro, estadoFiltro, pagoOverrides, fechaInicio, fechaFin, orden]);
-
-  // Si cambian los filtros y una fila seleccionada deja de estar visible, se
-  // quita de la selección para que la suma mostrada nunca incluya montos ocultos.
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const visibles = new Set(filtered.map((t) => t.id));
-      let cambio = false;
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (visibles.has(id)) next.add(id);
-        else cambio = true;
-      }
-      return cambio ? next : prev;
-    });
-  }, [filtered]);
-
-  function handleMontoClick(id: string, e: MouseEvent) {
-    const idx = filtered.findIndex((t) => t.id === id);
-    if (idx === -1) return;
-
-    if (e.shiftKey && anchorId) {
-      const anchorIdx = filtered.findIndex((t) => t.id === anchorId);
-      if (anchorIdx === -1) {
-        setSelectedIds(new Set([id]));
-        setAnchorId(id);
-        return;
-      }
-      const [from, to] = anchorIdx < idx ? [anchorIdx, idx] : [idx, anchorIdx];
-      setSelectedIds(new Set(filtered.slice(from, to + 1).map((t) => t.id)));
-      return;
-    }
-
-    if (e.ctrlKey || e.metaKey) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-      setAnchorId(id);
-      return;
-    }
-
-    setSelectedIds(new Set([id]));
-    setAnchorId(id);
-  }
-
-  function toggleSelectAll() {
-    setSelectedIds((prev) =>
-      prev.size === filtered.length ? new Set() : new Set(filtered.map((t) => t.id))
-    );
-  }
-
-  const seleccionStats = useMemo(() => {
-    const seleccionadas = filtered.filter((t) => selectedIds.has(t.id));
-    const suma = seleccionadas.reduce(
-      (acc, t) => acc + (t.tipo === "ingreso" ? t.monto : -t.monto),
-      0
-    );
-    return { count: seleccionadas.length, suma };
-  }, [filtered, selectedIds]);
+  }, [data, search, tipoFiltro, metodoFiltro, lineaFiltro, fechaInicio, fechaFin, orden]);
 
   const columns = useMemo<ColumnDef<TransaccionRow>[]>(
     () => [
@@ -318,32 +242,19 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
       },
       {
         accessorKey: "monto",
-        header: () => (
-          <button
-            type="button"
-            onClick={toggleSelectAll}
-            className="hover:underline"
-            title="Seleccionar todas las celdas visibles"
-          >
-            Monto
-          </button>
-        ),
+        header: "Monto",
         cell: ({ row }) => {
           const esIngreso = row.original.tipo === "ingreso";
-          const seleccionada = selectedIds.has(row.original.id);
           return (
-            <button
-              type="button"
-              onClick={(e) => handleMontoClick(row.original.id, e)}
+            <span
               className={
-                "w-full rounded px-2 py-1 text-right text-mono-amount font-medium transition-colors " +
-                (esIngreso ? "text-accent-success" : "text-accent-danger") +
-                (seleccionada ? " bg-primary/10 ring-1 ring-primary/30" : "")
+                "text-mono-amount font-medium " +
+                (esIngreso ? "text-accent-success" : "text-accent-danger")
               }
             >
               {esIngreso ? "+" : "-"}
               {formatCurrency(row.original.monto)}
-            </button>
+            </span>
           );
         },
       },
@@ -426,7 +337,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metodosPago, lineas, cuentaMadreId, cuentaMadreNombre, pagoOverrides, pagoPendingId, selectedIds, filtered, anchorId]
+    [metodosPago, lineas, cuentaMadreId, cuentaMadreNombre, pagoOverrides, pagoPendingId]
   );
 
   const table = useReactTable({
@@ -457,28 +368,6 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
 
   return (
     <div className="space-y-3">
-      {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between rounded-lg border bg-primary/5 px-3 py-2 text-sm">
-          <span>
-            {seleccionStats.count} celda{seleccionStats.count === 1 ? "" : "s"} seleccionada
-            {seleccionStats.count === 1 ? "" : "s"} ·{" "}
-            <span
-              className={
-                "text-mono-amount font-medium " +
-                (seleccionStats.suma < 0 ? "text-accent-danger" : "text-accent-success")
-              }
-            >
-              {seleccionStats.suma < 0 ? "-" : "+"}
-              {formatCurrency(Math.abs(seleccionStats.suma))}
-            </span>
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-            <XIcon className="size-4" />
-            Limpiar selección
-          </Button>
-        </div>
-      )}
-
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Buscar por descripción o destinatario..."
@@ -526,20 +415,6 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
                 {l.nombre}
               </SelectItem>
             ))}
-          </SelectContent>
-        </Select>
-        <Select value={estadoFiltro} onValueChange={(v) => setEstadoFiltro(v ?? "todos")}>
-          <SelectTrigger>
-            <SelectValue placeholder="Estado">
-              {(v: string) =>
-                v === "pagado" ? "Pagado" : v === "pendiente" ? "Pendiente" : "Todos los estados"
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los estados</SelectItem>
-            <SelectItem value="pagado">Pagado</SelectItem>
-            <SelectItem value="pendiente">Pendiente</SelectItem>
           </SelectContent>
         </Select>
         <Input
