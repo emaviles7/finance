@@ -158,7 +158,7 @@ export default async function PresupuestosPage() {
                               <span
                                 className={
                                   "text-mono-amount text-sm " +
-                                  (disp < 0 ? "text-accent-danger" : "text-foreground")
+                                  (disp < 0 ? "text-accent-danger" : "text-accent-success")
                                 }
                               >
                                 {formatCurrency(disp)}

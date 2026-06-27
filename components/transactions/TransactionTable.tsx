@@ -243,25 +243,20 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
       {
         accessorKey: "monto",
         header: "Monto",
-        cell: ({ row }) => (
-          <span
-            className={
-              "text-mono-amount font-medium " +
-              (row.original.tipo === "ingreso"
-                ? "text-accent-success"
-                : row.original.tipo === "egreso" || row.original.tipo === "transferencia_externa"
-                  ? "text-accent-danger"
-                  : "text-foreground")
-            }
-          >
-            {row.original.tipo === "egreso" || row.original.tipo === "transferencia_externa"
-              ? "-"
-              : row.original.tipo === "ingreso"
-                ? "+"
-                : ""}
-            {formatCurrency(row.original.monto)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const esIngreso = row.original.tipo === "ingreso";
+          return (
+            <span
+              className={
+                "text-mono-amount font-medium " +
+                (esIngreso ? "text-accent-success" : "text-accent-danger")
+              }
+            >
+              {esIngreso ? "+" : "-"}
+              {formatCurrency(row.original.monto)}
+            </span>
+          );
+        },
       },
       {
         id: "estado",
