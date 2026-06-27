@@ -118,8 +118,8 @@ export function CuentaMadreLedger({
                 {formatCurrency(f.balance)}
               </TableCell>
               <TableCell>
-                {!f.esAjuste && (
-                  <div className="flex justify-end gap-1">
+                <div className="flex justify-end gap-1">
+                  {!f.esAjuste && (
                     <TransactionSheet
                       mode="edit"
                       transaccionId={f.id}
@@ -142,16 +142,17 @@ export function CuentaMadreLedger({
                         </Button>
                       }
                     />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleDelete(f.id)}
-                      disabled={deletingId === f.id}
-                    >
-                      <Trash2Icon className="size-4 text-destructive" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => handleDelete(f.id)}
+                    disabled={deletingId === f.id}
+                    title="Eliminar"
+                  >
+                    <Trash2Icon className="size-4 text-destructive" />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}

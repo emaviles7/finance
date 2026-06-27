@@ -93,8 +93,8 @@ export function AjustarSaldoDialog({
         <DialogHeader>
           <DialogTitle>Ajustar saldo de la Cuenta Madre</DialogTitle>
           <DialogDescription>
-            Edita el saldo inicial (de arranque) o registra un ajuste para que el saldo actual
-            coincida con tu valor real. Ninguna de las dos opciones modifica el historial existente.
+            Edita el saldo inicial (de arranque) o fija el saldo actual a tu valor real. Ninguna de
+            las dos opciones crea movimientos ni modifica el historial existente.
           </DialogDescription>
         </DialogHeader>
 
@@ -122,8 +122,8 @@ export function AjustarSaldoDialog({
           <div className="space-y-2 border-t pt-4">
             <Label htmlFor="ajuste-saldo-actual">Saldo actual</Label>
             <p className="text-xs text-muted-foreground">
-              Registra una transacción de &quot;Ajuste de saldo&quot; por la diferencia para que el
-              balance actual quede en este valor.
+              Deja el balance actual en este valor. No crea ninguna transacción: solo actualiza el
+              saldo (mueve el saldo inicial por la diferencia).
             </p>
             <div className="flex gap-2">
               <Input
