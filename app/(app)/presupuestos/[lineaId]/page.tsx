@@ -5,20 +5,9 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { AuditTrail } from "@/components/shared/AuditTrail";
 import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
 import { LineaSheet } from "@/components/budgets/LineaSheet";
-import { LedgerRowActions } from "@/components/budgets/LedgerRowActions";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { LibroContableTable } from "@/components/budgets/LibroContableTable";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon, PencilIcon } from "lucide-react";
-import { formatCurrency } from "@/lib/utils/currency";
-import { formatDate } from "@/lib/utils/dates";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -206,53 +195,7 @@ export default async function LineaDetallePage({
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Libro contable</h2>
-        {filasConBalance.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Sin movimientos todavía. Asigna un presupuesto a esta línea desde Presupuestos.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Descripción</TableHead>
-                  <TableHead className="text-right">Ingreso</TableHead>
-                  <TableHead className="text-right">Egreso</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filasConBalance.map((f, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="whitespace-nowrap">{formatDate(f.fecha)}</TableCell>
-                    <TableCell>{f.descripcion}</TableCell>
-                    <TableCell className="text-mono-amount text-right text-accent-success">
-                      {f.delta > 0 ? formatCurrency(f.delta) : ""}
-                    </TableCell>
-                    <TableCell className="text-mono-amount text-right text-accent-danger">
-                      {f.delta < 0 ? formatCurrency(Math.abs(f.delta)) : ""}
-                    </TableCell>
-                    <TableCell className="text-mono-amount text-right font-medium">
-                      {formatCurrency(f.balance)}
-                    </TableCell>
-                    <TableCell>
-                      {f.id && f.tipo === "ajuste_linea" && (
-                        <LedgerRowActions kind="ajuste_linea" id={f.id} />
-                      )}
-                      {f.id && (f.tipo === "egreso" || f.tipo === "transferencia_externa") && (
-                        <LedgerRowActions kind="transaccion" id={f.id} />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <LibroContableTable filas={filasConBalance} />
       </div>
     </div>
   );
