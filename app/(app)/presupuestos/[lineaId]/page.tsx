@@ -55,7 +55,7 @@ export default async function LineaDetallePage({
 
   const hoy = new Date();
 
-  const [{ data: lineas }, { data: presupuestos }, { data: historial }, { data: categorias }] = await Promise.all([
+  const [{ data: lineas }, { data: presupuestos }, { data: historial }, { data: categorias }, { data: transferencias }] = await Promise.all([
     supabase
       .from("lineas_presupuestarias")
       .select("id, nombre, categorias(nombre)")
@@ -79,6 +79,13 @@ export default async function LineaDetallePage({
       .eq("es_ingreso", false)
       .eq("activa", true)
       .order("orden"),
+    // Origen/destino de cada transferencia que toca esta línea (para mostrar la
+    // contraparte en la descripción). Solo lectura: no modifica nada.
+    supabase
+      .from("transferencias_linea")
+      .select("id, linea_origen_id, linea_destino_id")
+      .eq("familia_id", familiaId)
+      .or(`linea_origen_id.eq.${lineaId},linea_destino_id.eq.${lineaId}`),
   ]);
 
   const categoriaNombre = unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? "Sin categoría";
@@ -88,6 +95,26 @@ export default async function LineaDetallePage({
     nombre: l.nombre,
     categoriaNombre: unwrap<{ nombre: string }>(l.categorias)?.nombre ?? "Sin categoría",
   }));
+
+  // Nombre por línea (incluida la actual) para resolver la contraparte de las transferencias.
+  const nombrePorLinea = new Map<string, string>();
+  for (const l of lineas ?? []) nombrePorLinea.set(l.id, l.nombre);
+  nombrePorLinea.set(linea.id, linea.nombre);
+
+  // Origen y destino de cada transferencia, indexados por su id.
+  const transferInfo = new Map<string, { origen: string; destino: string }>();
+  for (const tl of transferencias ?? []) {
+    transferInfo.set(tl.id, {
+      origen: nombrePorLinea.get(tl.linea_origen_id) ?? "otra línea",
+      destino: nombrePorLinea.get(tl.linea_destino_id) ?? "otra línea",
+    });
+  }
+
+  // Descripciones por defecto de la vista (cuando la transferencia no llevaba nota propia).
+  const TRANSFER_DESC_DEFAULTS = new Set([
+    "Transferencia entre líneas (enviada)",
+    "Transferencia entre líneas (recibida)",
+  ]);
 
   // Neto presupuestado por mes (clave "anio-mes").
   const netByMonth = new Map<string, { anio: number; mes: number; neto: number }>();
@@ -101,16 +128,41 @@ export default async function LineaDetallePage({
   const movimientos: LedgerRow[] = [];
   for (const h of historial ?? []) {
     const delta = Number(h.delta);
-    if (h.tipo === "transferencia_linea_entrada" || h.tipo === "transferencia_linea_salida") {
+    const esTransfer =
+      h.tipo === "transferencia_linea_entrada" || h.tipo === "transferencia_linea_salida";
+
+    // El mes presupuestario se toma de h.fecha (primero de mes que da la vista),
+    // para no romper el descuadre de doble conteo aunque se muestre otra fecha.
+    if (esTransfer) {
       const d = new Date(h.fecha);
       const key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
       transferNetByMonth.set(key, (transferNetByMonth.get(key) ?? 0) + delta);
     }
+
+    // Ajustes y transferencias muestran la fecha REAL en que se hicieron
+    // (created_at), no el primero del mes.
+    const fecha =
+      (h.tipo === "ajuste_linea" || esTransfer) && h.created_at
+        ? h.created_at.slice(0, 10)
+        : h.fecha;
+
+    // En transferencias, la descripción indica la línea contraparte.
+    let descripcion = h.descripcion ?? "Movimiento";
+    if (esTransfer) {
+      const info = h.id ? transferInfo.get(h.id) : undefined;
+      const nota =
+        h.descripcion && !TRANSFER_DESC_DEFAULTS.has(h.descripcion) ? ` · ${h.descripcion}` : "";
+      descripcion =
+        h.tipo === "transferencia_linea_salida"
+          ? `Transferencia hacia ${info?.destino ?? "otra línea"}${nota}`
+          : `Transferencia desde ${info?.origen ?? "otra línea"}${nota}`;
+    }
+
     movimientos.push({
       id: h.id,
       tipo: h.tipo,
-      fecha: h.fecha,
-      descripcion: h.descripcion ?? "Movimiento",
+      fecha,
+      descripcion,
       delta,
       orden: 1,
       createdAt: h.created_at ?? h.fecha,
