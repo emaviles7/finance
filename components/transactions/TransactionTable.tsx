@@ -21,13 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Dialog,
   DialogContent,
@@ -85,19 +79,12 @@ interface TransactionTableProps {
   cuentaMadreNombre?: string;
 }
 
-const TIPO_BADGE: Record<TransaccionRow["tipo"], { label: string; className: string }> = {
-  ingreso: { label: "Ingreso", className: "bg-accent-success/15 text-accent-success" },
-  egreso: { label: "Egreso", className: "bg-accent-danger/15 text-accent-danger" },
-  transferencia: { label: "Transferencia Interna", className: "bg-accent-warning/15 text-accent-warning" },
-  transferencia_externa: { label: "Transferencia Externa", className: "bg-accent-warning/25 text-accent-warning" },
-};
-
 const FILTROS_INICIALES = {
   search: "",
-  tipoFiltro: "todos",
-  metodoFiltro: "todos",
-  lineaFiltro: "todas",
-  estadoFiltro: "todos",
+  tiposFiltro: [] as string[],
+  metodosFiltro: [] as string[],
+  lineasFiltro: [] as string[],
+  estadosFiltro: [] as string[],
   fechaInicio: "",
   fechaFin: "",
 };
@@ -105,10 +92,10 @@ const FILTROS_INICIALES = {
 export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cuentaMadreNombre }: TransactionTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState(FILTROS_INICIALES.search);
-  const [tipoFiltro, setTipoFiltro] = useState<string>(FILTROS_INICIALES.tipoFiltro);
-  const [metodoFiltro, setMetodoFiltro] = useState<string>(FILTROS_INICIALES.metodoFiltro);
-  const [lineaFiltro, setLineaFiltro] = useState<string>(FILTROS_INICIALES.lineaFiltro);
-  const [estadoFiltro, setEstadoFiltro] = useState<string>(FILTROS_INICIALES.estadoFiltro);
+  const [tiposFiltro, setTiposFiltro] = useState<string[]>(FILTROS_INICIALES.tiposFiltro);
+  const [metodosFiltro, setMetodosFiltro] = useState<string[]>(FILTROS_INICIALES.metodosFiltro);
+  const [lineasFiltro, setLineasFiltro] = useState<string[]>(FILTROS_INICIALES.lineasFiltro);
+  const [estadosFiltro, setEstadosFiltro] = useState<string[]>(FILTROS_INICIALES.estadosFiltro);
   const [fechaInicio, setFechaInicio] = useState(FILTROS_INICIALES.fechaInicio);
   const [fechaFin, setFechaFin] = useState(FILTROS_INICIALES.fechaFin);
   const [orden, setOrden] = useState<"desc" | "asc">("desc");
@@ -159,32 +146,31 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
 
   const hayFiltrosActivos =
     search !== "" ||
-    tipoFiltro !== "todos" ||
-    metodoFiltro !== "todos" ||
-    lineaFiltro !== "todas" ||
-    estadoFiltro !== "todos" ||
+    tiposFiltro.length > 0 ||
+    metodosFiltro.length > 0 ||
+    lineasFiltro.length > 0 ||
+    estadosFiltro.length > 0 ||
     fechaInicio !== "" ||
     fechaFin !== "";
 
   function limpiarFiltros() {
     setSearch(FILTROS_INICIALES.search);
-    setTipoFiltro(FILTROS_INICIALES.tipoFiltro);
-    setMetodoFiltro(FILTROS_INICIALES.metodoFiltro);
-    setLineaFiltro(FILTROS_INICIALES.lineaFiltro);
-    setEstadoFiltro(FILTROS_INICIALES.estadoFiltro);
+    setTiposFiltro(FILTROS_INICIALES.tiposFiltro);
+    setMetodosFiltro(FILTROS_INICIALES.metodosFiltro);
+    setLineasFiltro(FILTROS_INICIALES.lineasFiltro);
+    setEstadosFiltro(FILTROS_INICIALES.estadosFiltro);
     setFechaInicio(FILTROS_INICIALES.fechaInicio);
     setFechaFin(FILTROS_INICIALES.fechaFin);
   }
 
   const filtered = useMemo(() => {
     const resultado = data.filter((t) => {
-      if (tipoFiltro !== "todos" && t.tipo !== tipoFiltro) return false;
-      if (metodoFiltro !== "todos" && (t.metodo_pago ?? "") !== metodoFiltro) return false;
-      if (lineaFiltro !== "todas" && t.linea_id !== lineaFiltro) return false;
-      if (estadoFiltro !== "todos") {
-        const pagado = getPago(t).pagado;
-        if (estadoFiltro === "pagado" && !pagado) return false;
-        if (estadoFiltro === "pendiente" && pagado) return false;
+      if (tiposFiltro.length > 0 && !tiposFiltro.includes(t.tipo)) return false;
+      if (metodosFiltro.length > 0 && !metodosFiltro.includes(t.metodo_pago ?? "")) return false;
+      if (lineasFiltro.length > 0 && !lineasFiltro.includes(t.linea_id ?? "")) return false;
+      if (estadosFiltro.length > 0) {
+        const estado = getPago(t).pagado ? "pagado" : "pendiente";
+        if (!estadosFiltro.includes(estado)) return false;
       }
       if (fechaInicio && t.fecha < fechaInicio) return false;
       if (fechaFin && t.fecha > fechaFin) return false;
@@ -204,7 +190,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
       orden === "desc" ? b.fecha.localeCompare(a.fecha) : a.fecha.localeCompare(b.fecha)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, search, tipoFiltro, metodoFiltro, lineaFiltro, estadoFiltro, pagoOverrides, fechaInicio, fechaFin, orden]);
+  }, [data, search, tiposFiltro, metodosFiltro, lineasFiltro, estadosFiltro, pagoOverrides, fechaInicio, fechaFin, orden]);
 
   // Si cambian los filtros y una fila seleccionada deja de estar visible, se
   // quita de la selección para que la suma mostrada nunca incluya montos ocultos.
@@ -486,62 +472,36 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={tipoFiltro} onValueChange={(v) => setTipoFiltro(v ?? "todos")}>
-          <SelectTrigger>
-            <SelectValue placeholder="Tipo">
-              {(v: string) => TIPO_BADGE[v as TransaccionRow["tipo"]]?.label ?? "Todos los tipos"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los tipos</SelectItem>
-            <SelectItem value="ingreso">Ingreso</SelectItem>
-            <SelectItem value="egreso">Egreso</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={metodoFiltro} onValueChange={(v) => setMetodoFiltro(v ?? "todos")}>
-          <SelectTrigger>
-            <SelectValue placeholder="Método de pago">
-              {(v: string) => (v === "todos" ? "Todos los métodos" : v)}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los métodos</SelectItem>
-            {metodosPago.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={lineaFiltro} onValueChange={(v) => setLineaFiltro(v ?? "todas")}>
-          <SelectTrigger>
-            <SelectValue placeholder="Línea">
-              {(v: string) => lineas.find((l) => l.id === v)?.nombre ?? "Todas las líneas"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas las líneas</SelectItem>
-            {lineas.map((l) => (
-              <SelectItem key={l.id} value={l.id}>
-                {l.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={estadoFiltro} onValueChange={(v) => setEstadoFiltro(v ?? "todos")}>
-          <SelectTrigger>
-            <SelectValue placeholder="Estado">
-              {(v: string) =>
-                v === "pagado" ? "Pagado" : v === "pendiente" ? "Pendiente" : "Todos los estados"
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los estados</SelectItem>
-            <SelectItem value="pagado">Pagado</SelectItem>
-            <SelectItem value="pendiente">Pendiente</SelectItem>
-          </SelectContent>
-        </Select>
+        <MultiSelect
+          placeholder="Todos los tipos"
+          selected={tiposFiltro}
+          onChange={setTiposFiltro}
+          options={[
+            { value: "ingreso", label: "Ingreso" },
+            { value: "egreso", label: "Egreso" },
+          ]}
+        />
+        <MultiSelect
+          placeholder="Todos los métodos"
+          selected={metodosFiltro}
+          onChange={setMetodosFiltro}
+          options={metodosPago.map((m) => ({ value: m, label: m }))}
+        />
+        <MultiSelect
+          placeholder="Todas las líneas"
+          selected={lineasFiltro}
+          onChange={setLineasFiltro}
+          options={lineas.map((l) => ({ value: l.id, label: l.nombre }))}
+        />
+        <MultiSelect
+          placeholder="Todos los estados"
+          selected={estadosFiltro}
+          onChange={setEstadosFiltro}
+          options={[
+            { value: "pagado", label: "Pagado" },
+            { value: "pendiente", label: "Pendiente" },
+          ]}
+        />
         <Input
           type="date"
           value={fechaInicio}
