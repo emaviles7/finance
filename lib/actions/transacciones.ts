@@ -117,6 +117,7 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
       linea_id: parsed.linea_id || null,
       categoria_id: parsed.linea_id ? undefined : null,
       metodo_pago: parsed.metodo_pago || null,
+      notas: parsed.notas || null,
       // pagado / fecha_pagado NO se tocan aquí: se gestionan desde la columna
       // Estado de la tabla, para no pisar el estado al editar otros campos.
     })

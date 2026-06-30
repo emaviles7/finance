@@ -129,13 +129,18 @@ export default async function CuentaMadrePage() {
     const delta = deltaDe(t);
     saldo += delta;
     const linea = unwrap<{ nombre: string; color: string | null }>(t.linea);
-    const origen = t.metodo_pago || t.destinatario_externo || t.comercio || null;
+    const origen = t.metodo_pago || t.comercio || null;
+    // Destino (a dónde se envió el dinero): guardado en destinatario_externo.
+    const destino =
+      t.tipo === "egreso" || t.tipo === "transferencia_externa" ? t.destinatario_externo : null;
     return {
       id: t.id,
       fecha: t.fecha,
       descripcion: t.descripcion,
       origen,
       origenColor: origen ? metodoColores.get(origen) ?? null : null,
+      destino,
+      destinoColor: destino ? metodoColores.get(destino) ?? null : null,
       lineaNombre: linea?.nombre ?? null,
       lineaColor: linea?.color ?? null,
       notas: t.notas,

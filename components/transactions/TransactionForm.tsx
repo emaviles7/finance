@@ -70,6 +70,7 @@ export function TransactionForm({
       cuenta_origen_id: cuentaMadreId,
       linea_id: "",
       metodo_pago: "",
+      destinatario_externo: "",
       notas: "",
       ...defaultValues,
     },
@@ -102,6 +103,27 @@ export function TransactionForm({
     } else {
       setModoOtro(false);
       setValue("metodo_pago", v);
+    }
+  }
+
+  // Destino (solo egresos): a qué cuenta/método se envió el dinero. Se guarda en
+  // destinatario_externo (campo libre para egresos). Mismo patrón que el método.
+  const destinoValue = watch("destinatario_externo") ?? "";
+  const [modoOtroDestino, setModoOtroDestino] = useState(
+    () => !!destinoValue && !metodosPago.includes(destinoValue)
+  );
+  const destinoSelectValue = modoOtroDestino ? OTROS : destinoValue === "" ? NINGUNO : destinoValue;
+
+  function onSelectDestino(v: string | null) {
+    if (v === OTROS) {
+      setModoOtroDestino(true);
+      setValue("destinatario_externo", "");
+    } else if (v === NINGUNO || !v) {
+      setModoOtroDestino(false);
+      setValue("destinatario_externo", "");
+    } else {
+      setModoOtroDestino(false);
+      setValue("destinatario_externo", v);
     }
   }
 
@@ -202,6 +224,36 @@ export function TransactionForm({
             </p>
           ))}
       </div>
+
+      {tipo === "egreso" && (
+        <div className="space-y-2">
+          <Label>Destino — cuenta o método al que se envió (opcional)</Label>
+          <Select value={destinoSelectValue} onValueChange={onSelectDestino}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Selecciona...">
+                {(v: string) => (v === OTROS ? "Otros" : v === NINGUNO || !v ? "(Ninguno)" : v)}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NINGUNO}>(Ninguno)</SelectItem>
+              {metodosPago.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+              <SelectItem value={OTROS}>Otros</SelectItem>
+            </SelectContent>
+          </Select>
+          {modoOtroDestino && (
+            <Input
+              autoFocus
+              placeholder="Escribe el destino"
+              value={destinoValue}
+              onChange={(e) => setValue("destinatario_externo", e.target.value)}
+            />
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Línea presupuestaria (opcional)</Label>

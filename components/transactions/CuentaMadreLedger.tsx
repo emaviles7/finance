@@ -27,6 +27,8 @@ export type LedgerRow = {
   descripcion: string;
   origen: string | null;
   origenColor: string | null;
+  destino: string | null;
+  destinoColor: string | null;
   lineaNombre: string | null;
   lineaColor: string | null;
   notas: string | null;
@@ -73,7 +75,7 @@ export function CuentaMadreLedger({
   }
 
   return (
-    <div className="rounded-lg border">
+    <div className="overflow-x-auto rounded-lg border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -81,6 +83,7 @@ export function CuentaMadreLedger({
             <TableHead>Descripción</TableHead>
             <TableHead>Origen</TableHead>
             <TableHead>Destino</TableHead>
+            <TableHead>Línea</TableHead>
             <TableHead>Nota</TableHead>
             <TableHead className="text-right">Ingreso</TableHead>
             <TableHead className="text-right">Egreso</TableHead>
@@ -96,6 +99,13 @@ export function CuentaMadreLedger({
               <TableCell>
                 {f.origen ? (
                   <ColorChip label={f.origen} color={f.origenColor} />
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {f.destino ? (
+                  <ColorChip label={f.destino} color={f.destinoColor} />
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
@@ -134,6 +144,7 @@ export function CuentaMadreLedger({
                         tipo: f.tipo === "ingreso" ? "ingreso" : "egreso",
                         linea_id: f.linea_id ?? "",
                         metodo_pago: f.metodo_pago ?? "",
+                        destinatario_externo: f.destino ?? "",
                         notas: f.notas ?? "",
                       }}
                       trigger={

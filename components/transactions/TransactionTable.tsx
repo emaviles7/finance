@@ -396,6 +396,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
                 tipo: row.original.tipo === "ingreso" ? "ingreso" : "egreso",
                 linea_id: row.original.linea_id ?? "",
                 metodo_pago: row.original.metodo_pago ?? "",
+                destinatario_externo: row.original.destinatario_externo ?? "",
                 notas: row.original.notas ?? "",
               }}
               trigger={
