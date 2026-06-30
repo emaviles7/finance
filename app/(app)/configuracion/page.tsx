@@ -4,6 +4,8 @@ import { CuentaMadreSettingsForm } from "@/components/settings/CuentaMadreSettin
 import { CategoryList } from "@/components/settings/CategoryList";
 import { MetodoPagoList } from "@/components/settings/MetodoPagoList";
 import { MembersList } from "@/components/settings/MembersList";
+import { ExportarBackupButton } from "@/components/shared/ExportarBackupButton";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 function unwrap<T>(rel: unknown): T | null {
   if (!rel) return null;
@@ -74,6 +76,20 @@ export default async function ConfiguracionPage() {
         <CategoryList categorias={categorias ?? []} />
 
         <MetodoPagoList metodos={metodosPago ?? []} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Backup (Excel)</CardTitle>
+            <CardDescription>
+              Descarga un archivo Excel con la Cuenta Madre, todas las transacciones y una hoja por
+              cada línea presupuestaria. Te sirve como respaldo: el archivo queda en tu equipo y se
+              abre sin conexión.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ExportarBackupButton />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
