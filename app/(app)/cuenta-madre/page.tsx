@@ -4,6 +4,7 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { AjustarSaldoDialog } from "@/components/transactions/AjustarSaldoDialog";
 import { CuentaMadreLedger, type LedgerRow } from "@/components/transactions/CuentaMadreLedger";
+import { ExportarBackupButton } from "@/components/shared/ExportarBackupButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
@@ -167,6 +168,7 @@ export default async function CuentaMadrePage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <ExportarBackupButton />
           <AjustarSaldoDialog saldoActual={balanceActual} saldoInicial={Number(cuenta.saldo_inicial)} />
           <TransactionSheet
             metodosPago={metodosPagoOptions}

@@ -9,6 +9,7 @@ import {
   type GridTransferencia,
 } from "@/components/budgets/PresupuestoGrid";
 import { LineaAcciones } from "@/components/budgets/LineaAcciones";
+import { ExportarBackupButton } from "@/components/shared/ExportarBackupButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/currency";
 
@@ -158,7 +159,8 @@ export default async function PresupuestosPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Presupuestos</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportarBackupButton />
           <TransferenciaLineaDialog
             lineas={lineasConCategoria.map((l) => ({ id: l.id, nombre: l.nombre, categoriaNombre: l.categoria_nombre }))}
             anio={anio}

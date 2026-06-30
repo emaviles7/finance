@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TransactionTable, type TransaccionRow } from "@/components/transactions/TransactionTable";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
+import { ExportarBackupButton } from "@/components/shared/ExportarBackupButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
@@ -109,6 +110,7 @@ export default async function TransaccionesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <ExportarBackupButton />
           <TransferenciaLineaDialog
             lineas={lineasOptions.map((l) => ({ id: l.id, nombre: l.nombre, categoriaNombre: l.categoria_nombre }))}
             anio={hoy.getFullYear()}
