@@ -55,7 +55,7 @@ export default async function LineaDetallePage({
 
   const hoy = new Date();
 
-  const [{ data: lineas }, { data: presupuestos }, { data: historial }, { data: categorias }, { data: transferencias }] = await Promise.all([
+  const [{ data: lineas }, { data: presupuestos }, { data: historial }, { data: categorias }, { data: transferencias }, { data: ingresos }] = await Promise.all([
     supabase
       .from("lineas_presupuestarias")
       .select("id, nombre, categorias(nombre)")
@@ -86,6 +86,16 @@ export default async function LineaDetallePage({
       .select("id, linea_origen_id, linea_destino_id")
       .eq("familia_id", familiaId)
       .or(`linea_origen_id.eq.${lineaId},linea_destino_id.eq.${lineaId}`),
+    // Ingresos asignados a esta línea: acreditan (suman) su disponible y se
+    // muestran como un movimiento en verde en el libro. La vista v_historial_linea
+    // no incluye ingresos, por eso se consultan aparte.
+    supabase
+      .from("transacciones")
+      .select("id, fecha, descripcion, monto, created_at")
+      .eq("familia_id", familiaId)
+      .eq("linea_id", lineaId)
+      .eq("tipo", "ingreso")
+      .eq("excluir_reportes", false),
   ]);
 
   const categoriaNombre = unwrap<{ nombre: string }>(linea.categorias)?.nombre ?? "Sin categoría";
@@ -166,6 +176,19 @@ export default async function LineaDetallePage({
       delta,
       orden: 1,
       createdAt: h.created_at ?? h.fecha,
+    });
+  }
+
+  // Ingresos asignados a la línea: suman al disponible (delta positivo).
+  for (const ing of ingresos ?? []) {
+    movimientos.push({
+      id: ing.id,
+      tipo: "ingreso",
+      fecha: ing.fecha,
+      descripcion: ing.descripcion ?? "Ingreso",
+      delta: Number(ing.monto),
+      orden: 1,
+      createdAt: ing.created_at ?? ing.fecha,
     });
   }
 

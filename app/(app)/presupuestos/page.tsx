@@ -2,7 +2,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { LineaSheet } from "@/components/budgets/LineaSheet";
 import { TransferenciaLineaDialog } from "@/components/budgets/TransferenciaLineaDialog";
-import { PresupuestoGrid, type GridLinea, type GridPresupuesto } from "@/components/budgets/PresupuestoGrid";
+import {
+  PresupuestoGrid,
+  type GridLinea,
+  type GridPresupuesto,
+  type GridTransferencia,
+} from "@/components/budgets/PresupuestoGrid";
 import { LineaAcciones } from "@/components/budgets/LineaAcciones";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -26,8 +31,15 @@ export default async function PresupuestosPage() {
 
   await supabase.rpc("fn_refresh_presupuesto_mes");
 
-  const [{ data: categorias }, { data: lineas }, { data: presupuestosHist }, { data: gastosHist }, { data: ajustesHist }] =
-    await Promise.all([
+  const [
+    { data: categorias },
+    { data: lineas },
+    { data: presupuestosHist },
+    { data: gastosHist },
+    { data: ajustesHist },
+    { data: transferenciasHist },
+    { data: ingresosHist },
+  ] = await Promise.all([
       supabase
         .from("categorias")
         .select("id, nombre")
@@ -54,6 +66,20 @@ export default async function PresupuestosPage() {
         .from("ajustes_linea")
         .select("linea_id, anio, mes, monto")
         .eq("familia_id", familiaId),
+      // Transferencias entre líneas: se usan para mostrar en el grid el
+      // presupuesto BRUTO (lo asignado), sin el efecto de las transferencias.
+      supabase
+        .from("transferencias_linea")
+        .select("linea_origen_id, linea_destino_id, anio, mes, monto")
+        .eq("familia_id", familiaId),
+      // Ingresos asignados a una línea: acreditan (suman) su disponible.
+      supabase
+        .from("transacciones")
+        .select("linea_id, monto")
+        .eq("familia_id", familiaId)
+        .eq("tipo", "ingreso")
+        .not("linea_id", "is", null)
+        .eq("excluir_reportes", false),
     ]);
 
   function unwrap(rel: unknown): { nombre: string } | null {
@@ -69,7 +95,14 @@ export default async function PresupuestosPage() {
     categoria_nombre: unwrap(l.categorias)?.nombre ?? "Sin categoría",
   }));
 
-  // Disponible global por línea = Σ presupuesto asignado + Σ ajustes − Σ gastado,
+  // Ingresos acreditados por línea (suman al disponible).
+  const ingresoPorLinea = new Map<string, number>();
+  for (const t of ingresosHist ?? []) {
+    if (!t.linea_id) continue;
+    ingresoPorLinea.set(t.linea_id, (ingresoPorLinea.get(t.linea_id) ?? 0) + Number(t.monto));
+  }
+
+  // Disponible global por línea = Σ presupuesto asignado + Σ ajustes + Σ ingresos − Σ gastado,
   // sobre TODO el historial (idéntico al balance final del libro contable de la
   // línea). Las transferencias entre líneas ya están reflejadas en el
   // presupuesto neto. Sumar todos los meses garantiza que la vista general y el
@@ -84,7 +117,8 @@ export default async function PresupuestosPage() {
     const gastado = (gastosHist ?? [])
       .filter((g) => g.linea_id === lineaId)
       .reduce((a, g) => a + Number(g.total_gastado), 0);
-    return presupuesto + ajustes - gastado;
+    const ingresos = ingresoPorLinea.get(lineaId) ?? 0;
+    return presupuesto + ajustes + ingresos - gastado;
   }
 
   // Agrupar por categoría conservando el orden de las líneas.
@@ -100,6 +134,25 @@ export default async function PresupuestosPage() {
     mes: p.mes,
     monto_presupuestado: Number(p.monto_presupuestado),
   }));
+
+  // Efecto neto de las transferencias por celda (línea/mes). El grid lo resta
+  // del valor guardado para mostrar el presupuesto BRUTO asignado, de modo que
+  // las transferencias no se vean reflejadas en el presupuesto mensual.
+  const gridTransferencias: GridTransferencia[] = (() => {
+    const m = new Map<string, GridTransferencia>();
+    const acumular = (linea_id: string, anio: number, mes: number, neto: number) => {
+      const k = `${anio}:${linea_id}:${mes}`;
+      const prev = m.get(k);
+      if (prev) prev.neto += neto;
+      else m.set(k, { linea_id, anio, mes, neto });
+    };
+    for (const t of transferenciasHist ?? []) {
+      const monto = Number(t.monto);
+      acumular(t.linea_origen_id, t.anio, t.mes, -monto);
+      acumular(t.linea_destino_id, t.anio, t.mes, monto);
+    }
+    return Array.from(m.values());
+  })();
 
   return (
     <div className="space-y-8">
@@ -188,7 +241,12 @@ export default async function PresupuestosPage() {
       {/* Definir presupuesto mes a mes en una tabla simple. */}
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-muted-foreground">Definir presupuesto mensual</h2>
-        <PresupuestoGrid lineas={gridLineas} presupuestos={gridPresupuestos} anioInicial={anio} />
+        <PresupuestoGrid
+          lineas={gridLineas}
+          presupuestos={gridPresupuestos}
+          transferencias={gridTransferencias}
+          anioInicial={anio}
+        />
       </section>
     </div>
   );

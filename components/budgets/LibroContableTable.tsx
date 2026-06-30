@@ -153,9 +153,10 @@ export function LibroContableTable({ filas }: { filas: LibroContableRow[] }) {
                     {f.id && f.tipo === "ajuste_linea" && (
                       <LedgerRowActions kind="ajuste_linea" id={f.id} />
                     )}
-                    {f.id && (f.tipo === "egreso" || f.tipo === "transferencia_externa") && (
-                      <LedgerRowActions kind="transaccion" id={f.id} />
-                    )}
+                    {f.id &&
+                      (f.tipo === "egreso" ||
+                        f.tipo === "transferencia_externa" ||
+                        f.tipo === "ingreso") && <LedgerRowActions kind="transaccion" id={f.id} />}
                   </TableCell>
                 </TableRow>
               ))

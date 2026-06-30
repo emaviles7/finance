@@ -22,30 +22,54 @@ const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "O
 
 export type GridLinea = { id: string; nombre: string; color: string; categoria_nombre: string };
 export type GridPresupuesto = { linea_id: string; anio: number; mes: number; monto_presupuestado: number };
+/** Efecto neto de transferencias por celda (línea/mes): + recibido, − enviado. */
+export type GridTransferencia = { linea_id: string; anio: number; mes: number; neto: number };
+
+const cellKey = (anio: number, lineaId: string, mes: number) => `${anio}:${lineaId}:${mes}`;
 
 export function PresupuestoGrid({
   lineas,
   presupuestos,
+  transferencias = [],
   anioInicial,
 }: {
   lineas: GridLinea[];
   presupuestos: GridPresupuesto[];
+  transferencias?: GridTransferencia[];
   anioInicial: number;
 }) {
   const router = useRouter();
   const [anio, setAnio] = useState(anioInicial);
   const [guardando, setGuardando] = useState(false);
 
-  // Valor original por celda (para detectar cambios) y valor editable.
+  // Efecto neto de transferencias por celda. El grid muestra el presupuesto
+  // BRUTO (= guardado − transferencias) para que las transferencias no se vean
+  // como parte del presupuesto del mes; al guardar se vuelve a sumar.
+  const transferNet = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of transferencias) m.set(cellKey(t.anio, t.linea_id, t.mes), t.neto);
+    return m;
+  }, [transferencias]);
+
+  // Valor original (bruto) por celda, para detectar cambios.
   const original = useMemo(() => {
     const m = new Map<string, number>();
-    for (const p of presupuestos) m.set(`${p.anio}:${p.linea_id}:${p.mes}`, Number(p.monto_presupuestado));
+    for (const p of presupuestos) {
+      const k = cellKey(p.anio, p.linea_id, p.mes);
+      m.set(k, Number(p.monto_presupuestado) - (transferNet.get(k) ?? 0));
+    }
     return m;
-  }, [presupuestos]);
+  }, [presupuestos, transferNet]);
 
   const [valores, setValores] = useState<Map<string, string>>(() => {
+    const tn = new Map<string, number>();
+    for (const t of transferencias) tn.set(cellKey(t.anio, t.linea_id, t.mes), t.neto);
     const m = new Map<string, string>();
-    for (const p of presupuestos) m.set(`${p.anio}:${p.linea_id}:${p.mes}`, String(p.monto_presupuestado));
+    for (const p of presupuestos) {
+      const k = cellKey(p.anio, p.linea_id, p.mes);
+      const bruto = Number(p.monto_presupuestado) - (tn.get(k) ?? 0);
+      m.set(k, bruto === 0 ? "" : String(bruto));
+    }
     return m;
   });
 
@@ -83,7 +107,14 @@ export function PresupuestoGrid({
         toast.error("Hay un monto inválido sin guardar");
         return;
       }
-      items.push({ linea_id: lineaId, anio: a, mes, monto_presupuestado: num, rollover: true });
+      // Se guarda el bruto tecleado + el efecto de transferencias de la celda,
+      // para conservar el disponible y el libro contable sin alterar nada más.
+      const montoGuardado = num + (transferNet.get(k) ?? 0);
+      if (montoGuardado < 0) {
+        toast.error("El presupuesto no puede ser menor a lo ya transferido desde esa línea ese mes");
+        return;
+      }
+      items.push({ linea_id: lineaId, anio: a, mes, monto_presupuestado: montoGuardado, rollover: true });
     }
     setGuardando(true);
     try {

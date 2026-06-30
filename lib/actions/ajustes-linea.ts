@@ -41,17 +41,24 @@ export async function ajustarBalanceLinea(lineaId: string, saldoDeseado: number)
     .maybeSingle();
   if (!linea) throw new Error("Línea no encontrada");
 
-  const [{ data: presu }, { data: ajustes }, { data: gastos }] = await Promise.all([
+  const [{ data: presu }, { data: ajustes }, { data: gastos }, { data: ingresos }] = await Promise.all([
     supabase.from("presupuestos").select("monto_presupuestado").eq("linea_id", lineaId).is("deleted_at", null),
     supabase.from("ajustes_linea").select("monto").eq("linea_id", lineaId),
     supabase.from("v_presupuesto_mes").select("total_gastado").eq("linea_id", lineaId),
+    supabase
+      .from("transacciones")
+      .select("monto")
+      .eq("linea_id", lineaId)
+      .eq("tipo", "ingreso")
+      .eq("excluir_reportes", false),
   ]);
 
   // Disponible = todo el historial (igual que el libro contable y la vista general).
   const presuSum = (presu ?? []).reduce((a, p) => a + Number(p.monto_presupuestado), 0);
   const ajusteSum = (ajustes ?? []).reduce((a, p) => a + Number(p.monto), 0);
   const gastoSum = (gastos ?? []).reduce((a, g) => a + Number(g.total_gastado), 0);
-  const disponible = presuSum + ajusteSum - gastoSum;
+  const ingresoSum = (ingresos ?? []).reduce((a, t) => a + Number(t.monto), 0);
+  const disponible = presuSum + ajusteSum + ingresoSum - gastoSum;
 
   const diferencia = Math.round((saldoDeseado - disponible) * 100) / 100;
   if (diferencia === 0) return;

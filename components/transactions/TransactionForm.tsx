@@ -105,10 +105,15 @@ export function TransactionForm({
     }
   }
 
+  // En un ingreso se puede elegir CUALQUIER línea (también las de gasto): el
+  // ingreso se suma al disponible de esa línea. En un egreso solo se ofrecen
+  // las líneas de gasto, como hasta ahora.
+  const lineasVisibles = tipo === "ingreso" ? lineas : lineas.filter((l) => !l.es_ingreso);
   const gruposLineas = new Map<string, LineaOption[]>();
-  for (const l of lineas.filter((l) => l.es_ingreso === (tipo === "ingreso"))) {
+  for (const l of lineasVisibles) {
     gruposLineas.set(l.categoria_nombre, [...(gruposLineas.get(l.categoria_nombre) ?? []), l]);
   }
+  const lineaSeleccionada = watch("linea_id");
 
   return (
     <form
@@ -228,6 +233,11 @@ export function TransactionForm({
           )}
         />
         {errors.linea_id && <p className="text-xs text-destructive">{errors.linea_id.message}</p>}
+        {tipo === "ingreso" && lineaSeleccionada && (
+          <p className="text-xs text-muted-foreground">
+            Este ingreso se sumará al disponible de la línea seleccionada.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
