@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { enviarCorreoBienvenida } from "@/lib/actions/emails";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,11 +30,21 @@ export default function RegistroPage() {
       options: { data: { nombre } },
     });
 
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
+
+    // Correo de bienvenida (aparte del de confirmación de Supabase). No bloquea
+    // ni rompe el registro si el proveedor de correo no está configurado o falla.
+    try {
+      await enviarCorreoBienvenida({ email, nombre });
+    } catch {
+      /* ignorar: el registro no debe fallar por el correo de bienvenida */
+    }
+
+    setLoading(false);
     router.push("/onboarding");
     router.refresh();
   }

@@ -67,6 +67,11 @@ export default function LoginPage() {
               {loading ? "Ingresando..." : "Ingresar"}
             </Button>
           </form>
+          <p className="mt-3 text-center text-sm">
+            <Link href="/recuperar" className="text-muted-foreground underline">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             ¿No tienes cuenta?{" "}
             <Link href="/registro" className="text-primary underline">
