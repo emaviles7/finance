@@ -52,7 +52,13 @@ async function resolverCuentaOrigen(
 export async function crearTransaccion(input: TransaccionInput): Promise<{ id: string }> {
   const parsed = transaccionSchema.parse(input);
   const { supabase, familiaId, userId } = await getFamiliaId();
-  const cuentaOrigenId = await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
+  // Un ingreso con destino en una línea presupuestaria NO toca la Cuenta Madre:
+  // se deja cuenta_origen_id en null (el trigger de saldo no la afecta) y solo
+  // suma al disponible de la línea. El resto se contabiliza contra la Madre.
+  const cuentaOrigenId =
+    parsed.tipo === "ingreso" && parsed.linea_id
+      ? null
+      : await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
 
   const { data, error } = await supabase
     .from("transacciones")
@@ -101,7 +107,11 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
 export async function actualizarTransaccion(id: string, input: TransaccionInput) {
   const parsed = transaccionSchema.parse(input);
   const { supabase, familiaId } = await getFamiliaId();
-  const cuentaOrigenId = await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
+  // Igual que al crear: un ingreso con destino en una línea no toca la Madre.
+  const cuentaOrigenId =
+    parsed.tipo === "ingreso" && parsed.linea_id
+      ? null
+      : await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
 
   const { error } = await supabase
     .from("transacciones")
@@ -128,6 +138,17 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
   // Las actualizaciones no disparan el trigger de saldo (solo AFTER INSERT),
   // así que recalculamos los saldos de las cuentas implicadas explícitamente.
   await recalcularSaldosTransaccion(id);
+  // La Cuenta Madre pudo ganar o perder este movimiento (p. ej. un ingreso que
+  // pasa a tener destino en una línea deja de sumar a la Madre), así que se
+  // recalcula siempre su saldo desde cero.
+  const { data: madre } = await supabase
+    .from("cuentas")
+    .select("id")
+    .eq("familia_id", familiaId)
+    .eq("es_cuenta_madre", true)
+    .eq("activa", true)
+    .maybeSingle();
+  if (madre) await supabase.rpc("fn_recalcular_saldo_cuenta", { p_cuenta_id: madre.id });
   await supabase.rpc("fn_refresh_presupuesto_mes");
 
   revalidatePath("/cuenta-madre");

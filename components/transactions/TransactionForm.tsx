@@ -82,6 +82,9 @@ export function TransactionForm({
   // solo para esa transacción, no se guarda en la lista).
   const OTROS = "__otros__";
   const NINGUNO = "__none__";
+  // Destino de un ingreso: Cuenta Madre (saldo general) o una línea. Como
+  // "línea vacía" = Cuenta Madre, se usa un valor centinela para el ítem.
+  const CUENTA_MADRE = "__cuenta_madre__";
   // La Cuenta Madre se ofrece como un origen/método más (default en egresos).
   const opcionesMetodo =
     cuentaMadreNombre && !metodosPago.includes(cuentaMadreNombre)
@@ -256,38 +259,70 @@ export function TransactionForm({
       )}
 
       <div className="space-y-2">
-        <Label>Línea presupuestaria (opcional)</Label>
+        <Label>{tipo === "ingreso" ? "Destino del ingreso" : "Línea presupuestaria (opcional)"}</Label>
         <Controller
           control={control}
           name="linea_id"
-          render={({ field }) => (
-            <Select value={field.value ?? ""} onValueChange={field.onChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Auto (motor de reglas) si se deja vacío">
-                  {(v: string) =>
-                    lineas.find((l) => l.id === v)?.nombre || "Auto (motor de reglas) si se deja vacío"
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from(gruposLineas.entries()).map(([categoriaNombre, lineasDeCategoria]) => (
-                  <SelectGroup key={categoriaNombre}>
-                    <SelectLabel>{categoriaNombre}</SelectLabel>
-                    {lineasDeCategoria.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>
-                        {l.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          render={({ field }) =>
+            tipo === "ingreso" ? (
+              <Select
+                value={field.value || CUENTA_MADRE}
+                onValueChange={(v) => field.onChange(v === CUENTA_MADRE ? "" : v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Cuenta Madre (saldo general)">
+                    {(v: string) =>
+                      v === CUENTA_MADRE || !v
+                        ? "Cuenta Madre (saldo general)"
+                        : lineas.find((l) => l.id === v)?.nombre ?? "Cuenta Madre (saldo general)"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={CUENTA_MADRE}>Cuenta Madre (saldo general)</SelectItem>
+                  {Array.from(gruposLineas.entries()).map(([categoriaNombre, lineasDeCategoria]) => (
+                    <SelectGroup key={categoriaNombre}>
+                      <SelectLabel>{categoriaNombre}</SelectLabel>
+                      {lineasDeCategoria.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Auto (motor de reglas) si se deja vacío">
+                    {(v: string) =>
+                      lineas.find((l) => l.id === v)?.nombre || "Auto (motor de reglas) si se deja vacío"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from(gruposLineas.entries()).map(([categoriaNombre, lineasDeCategoria]) => (
+                    <SelectGroup key={categoriaNombre}>
+                      <SelectLabel>{categoriaNombre}</SelectLabel>
+                      {lineasDeCategoria.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
+          }
         />
         {errors.linea_id && <p className="text-xs text-destructive">{errors.linea_id.message}</p>}
-        {tipo === "ingreso" && lineaSeleccionada && (
+        {tipo === "ingreso" && (
           <p className="text-xs text-muted-foreground">
-            Este ingreso se sumará al disponible de la línea seleccionada.
+            {lineaSeleccionada
+              ? "Este ingreso suma al disponible de la línea elegida y NO al saldo de la Cuenta Madre."
+              : "Este ingreso suma al saldo general de la Cuenta Madre."}
           </p>
         )}
       </div>
