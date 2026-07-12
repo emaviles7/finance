@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/shared/Sidebar";
+import { BottomNav } from "@/components/shared/BottomNav";
 import { Header } from "@/components/shared/Header";
 import { RealtimeRefresher } from "@/components/shared/RealtimeRefresher";
 import { PageTransition } from "@/components/shared/PageTransition";
@@ -32,10 +33,12 @@ export default async function AppLayout({
       <Sidebar />
       <div className="flex flex-1 flex-col">
         <Header email={user.email} />
-        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+        {/* pb extra en móvil para no quedar bajo la barra inferior; en escritorio (md:) intacto. */}
+        <main className="flex-1 overflow-y-auto bg-background p-4 pb-24 md:p-6 md:pb-6">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
+      <BottomNav />
     </div>
   );
 }

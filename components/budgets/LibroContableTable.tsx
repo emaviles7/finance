@@ -116,7 +116,7 @@ export function LibroContableTable({ filas }: { filas: LibroContableRow[] }) {
         )}
       </div>
 
-      <div className="rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>

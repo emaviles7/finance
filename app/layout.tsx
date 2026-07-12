@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,20 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "FamilyFinance",
   description: "Aplicación web financiera familiar",
+  appleWebApp: {
+    capable: true,
+    title: "FamilyFinance",
+    statusBarStyle: "black",
+  },
+  formatDetection: { telephone: false },
+};
+
+// Viewport estándar de móvil + color de la barra del navegador. No altera el
+// layout de escritorio.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#09090b",
 };
 
 export default function RootLayout({

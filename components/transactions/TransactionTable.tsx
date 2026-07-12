@@ -533,7 +533,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         )}
       </div>
 
-      <div className="rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
