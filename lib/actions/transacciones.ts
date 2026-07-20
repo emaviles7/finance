@@ -178,6 +178,30 @@ export async function actualizarEstadoPago(id: string, pagado: boolean, fechaPag
 }
 
 /**
+ * Igual que actualizarEstadoPago pero para varias transacciones a la vez, en un
+ * solo viaje al servidor. Se usa desde la barra de selección de la tabla para
+ * marcar como pagadas/pendientes todas las filas seleccionadas de golpe.
+ */
+export async function actualizarEstadoPagoBatch(
+  ids: string[],
+  pagado: boolean,
+  fechaPagado: string | null
+) {
+  if (ids.length === 0) return;
+  const { supabase } = await getFamiliaId();
+
+  const { error } = await supabase
+    .from("transacciones")
+    .update({ pagado, fecha_pagado: pagado ? fechaPagado || null : null })
+    .in("id", ids);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/transacciones");
+  revalidatePath("/cuenta-madre");
+}
+
+/**
  * Elimina la transacción (hard delete, como antes) y devuelve la fila
  * completa para permitir "Deshacer" inmediato vía restaurarTransaccion().
  * No hay papelera persistente para transacciones (decisión de producto):

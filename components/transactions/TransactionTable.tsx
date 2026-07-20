@@ -38,6 +38,8 @@ import {
   ArrowUpDownIcon,
   XIcon,
   StickyNoteIcon,
+  CheckIcon,
+  ClockIcon,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate, todayISO } from "@/lib/utils/dates";
@@ -45,6 +47,7 @@ import {
   eliminarTransaccion,
   restaurarTransaccion,
   actualizarEstadoPago,
+  actualizarEstadoPagoBatch,
 } from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 import { ColorChip } from "@/components/shared/ColorChip";
@@ -111,17 +114,20 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     new Map()
   );
   const [pagoPendingId, setPagoPendingId] = useState<string | null>(null);
+  const [bulkPending, setBulkPending] = useState(false);
 
   function getPago(row: TransaccionRow) {
     return pagoOverrides.get(row.id) ?? { pagado: row.pagado, fecha_pagado: row.fecha_pagado };
   }
 
+  // `pagado` es informativo (no afecta balances), así que basta con la
+  // actualización optimista: NO refrescamos la ruta para no perder la posición
+  // de scroll, la página de la tabla ni la selección acumulada del usuario.
   async function aplicarPago(id: string, pagado: boolean, fecha: string | null) {
     setPagoOverrides((prev) => new Map(prev).set(id, { pagado, fecha_pagado: pagado ? fecha : null }));
     setPagoPendingId(id);
     try {
       await actualizarEstadoPago(id, pagado, fecha);
-      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al actualizar el estado");
       setPagoOverrides((prev) => {
@@ -131,6 +137,29 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
       });
     } finally {
       setPagoPendingId(null);
+    }
+  }
+
+  // Marca como pagadas/pendientes todas las transacciones seleccionadas de una
+  // sola vez. La selección NO se limpia: se mantiene hasta "Limpiar selección".
+  async function marcarSeleccionadas(pagado: boolean) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const fecha = pagado ? todayISO() : null;
+    const previos = new Map(pagoOverrides);
+    setPagoOverrides((prev) => {
+      const m = new Map(prev);
+      for (const id of ids) m.set(id, { pagado, fecha_pagado: fecha });
+      return m;
+    });
+    setBulkPending(true);
+    try {
+      await actualizarEstadoPagoBatch(ids, pagado, fecha);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al actualizar el estado");
+      setPagoOverrides(previos);
+    } finally {
+      setBulkPending(false);
     }
   }
 
@@ -208,40 +237,49 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     });
   }, [filtered]);
 
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function handleMontoClick(id: string, e: MouseEvent) {
     const idx = filtered.findIndex((t) => t.id === id);
     if (idx === -1) return;
 
+    // Shift-click: añade el rango entre el ancla y la fila clicada a la
+    // selección actual (sin borrar lo ya seleccionado, para poder acumular).
     if (e.shiftKey && anchorId) {
       const anchorIdx = filtered.findIndex((t) => t.id === anchorId);
-      if (anchorIdx === -1) {
-        setSelectedIds(new Set([id]));
-        setAnchorId(id);
+      if (anchorIdx !== -1) {
+        const [from, to] = anchorIdx < idx ? [anchorIdx, idx] : [idx, anchorIdx];
+        const rango = filtered.slice(from, to + 1).map((t) => t.id);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const rid of rango) next.add(rid);
+          return next;
+        });
         return;
       }
-      const [from, to] = anchorIdx < idx ? [anchorIdx, idx] : [idx, anchorIdx];
-      setSelectedIds(new Set(filtered.slice(from, to + 1).map((t) => t.id)));
-      return;
     }
 
-    if (e.ctrlKey || e.metaKey) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-      setAnchorId(id);
-      return;
-    }
-
-    setSelectedIds(new Set([id]));
+    // Click normal (o ctrl/cmd-click): alterna esa fila y acumula. Así el
+    // usuario suma varias transacciones a mano sin tener que ir una por una.
+    toggleOne(id);
     setAnchorId(id);
   }
 
+  const todasSeleccionadas = filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
+  const algunaSeleccionada = filtered.some((t) => selectedIds.has(t.id));
+
   function toggleSelectAll() {
     setSelectedIds((prev) =>
-      prev.size === filtered.length ? new Set() : new Set(filtered.map((t) => t.id))
+      filtered.length > 0 && filtered.every((t) => prev.has(t.id))
+        ? new Set()
+        : new Set(filtered.map((t) => t.id))
     );
   }
 
@@ -256,6 +294,33 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
 
   const columns = useMemo<ColumnDef<TransaccionRow>[]>(
     () => [
+      {
+        id: "select",
+        header: () => (
+          <input
+            type="checkbox"
+            className="size-4"
+            aria-label="Seleccionar todas las transacciones filtradas"
+            checked={todasSeleccionadas}
+            ref={(el) => {
+              if (el) el.indeterminate = algunaSeleccionada && !todasSeleccionadas;
+            }}
+            onChange={toggleSelectAll}
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            className="size-4"
+            aria-label="Seleccionar transacción"
+            checked={selectedIds.has(row.original.id)}
+            onChange={() => {
+              toggleOne(row.original.id);
+              setAnchorId(row.original.id);
+            }}
+          />
+        ),
+      },
       {
         accessorKey: "fecha",
         header: "Fecha",
@@ -304,16 +369,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
       },
       {
         accessorKey: "monto",
-        header: () => (
-          <button
-            type="button"
-            onClick={toggleSelectAll}
-            className="hover:underline"
-            title="Seleccionar todas las celdas visibles"
-          >
-            Monto
-          </button>
-        ),
+        header: "Monto",
         cell: ({ row }) => {
           const esIngreso = row.original.tipo === "ingreso";
           const seleccionada = selectedIds.has(row.original.id);
@@ -445,9 +501,9 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
   return (
     <div className="space-y-3">
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between rounded-lg border bg-primary/5 px-3 py-2 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-primary/5 px-3 py-2 text-sm">
           <span>
-            {seleccionStats.count} celda{seleccionStats.count === 1 ? "" : "s"} seleccionada
+            {seleccionStats.count} transacci{seleccionStats.count === 1 ? "ón" : "ones"} seleccionada
             {seleccionStats.count === 1 ? "" : "s"} ·{" "}
             <span
               className={
@@ -459,10 +515,30 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
               {formatCurrency(Math.abs(seleccionStats.suma))}
             </span>
           </span>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-            <XIcon className="size-4" />
-            Limpiar selección
-          </Button>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => marcarSeleccionadas(true)}
+              disabled={bulkPending}
+            >
+              <CheckIcon className="size-4 text-accent-success" />
+              Marcar pagadas
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => marcarSeleccionadas(false)}
+              disabled={bulkPending}
+            >
+              <ClockIcon className="size-4 text-accent-warning" />
+              Marcar pendientes
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              <XIcon className="size-4" />
+              Limpiar selección
+            </Button>
+          </div>
         </div>
       )}
 
