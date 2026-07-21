@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -108,6 +108,11 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
   // Selección estilo Excel sobre la columna "Monto".
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
+  // Arrastre tipo Excel: al mantener pulsado sobre un monto y arrastrar, se
+  // selecciona (o deselecciona) todo el rango recorrido. `base` es la selección
+  // previa al arrastre para poder acumular; `mode` decide si añade o quita.
+  const dragState = useRef<{ startId: string; mode: "add" | "remove"; base: Set<string> } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   // Estado de pago editable desde la tabla (optimista para respuesta inmediata).
   const [pagoOverrides, setPagoOverrides] = useState<Map<string, { pagado: boolean; fecha_pagado: string | null }>>(
@@ -246,31 +251,57 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     });
   }
 
-  function handleMontoClick(id: string, e: MouseEvent) {
-    const idx = filtered.findIndex((t) => t.id === id);
-    if (idx === -1) return;
+  // Añade (o quita) a la selección el rango entre dos filas de `filtered`.
+  function aplicarRango(desdeId: string, hastaId: string, base: Set<string>, mode: "add" | "remove") {
+    const i = filtered.findIndex((t) => t.id === desdeId);
+    const j = filtered.findIndex((t) => t.id === hastaId);
+    if (i === -1 || j === -1) return;
+    const [from, to] = i < j ? [i, j] : [j, i];
+    const rango = filtered.slice(from, to + 1).map((t) => t.id);
+    const next = new Set(base);
+    if (mode === "add") for (const rid of rango) next.add(rid);
+    else for (const rid of rango) next.delete(rid);
+    setSelectedIds(next);
+  }
 
-    // Shift-click: añade el rango entre el ancla y la fila clicada a la
-    // selección actual (sin borrar lo ya seleccionado, para poder acumular).
+  // Pulsar sobre un monto inicia el arrastre. Si arranca sobre una celda ya
+  // seleccionada, el arrastre DESELECCIONA (como en Excel); si no, selecciona.
+  // Un simple click (sin mover) queda como alternar esa única celda.
+  function handleMontoMouseDown(id: string, e: MouseEvent) {
+    if (e.button !== 0) return; // solo botón primario
+    e.preventDefault();
+
+    // Shift extiende desde el ancla acumulando, sin iniciar arrastre.
     if (e.shiftKey && anchorId) {
-      const anchorIdx = filtered.findIndex((t) => t.id === anchorId);
-      if (anchorIdx !== -1) {
-        const [from, to] = anchorIdx < idx ? [anchorIdx, idx] : [idx, anchorIdx];
-        const rango = filtered.slice(from, to + 1).map((t) => t.id);
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          for (const rid of rango) next.add(rid);
-          return next;
-        });
-        return;
-      }
+      aplicarRango(anchorId, id, new Set(selectedIds), "add");
+      return;
     }
 
-    // Click normal (o ctrl/cmd-click): alterna esa fila y acumula. Así el
-    // usuario suma varias transacciones a mano sin tener que ir una por una.
-    toggleOne(id);
+    const mode: "add" | "remove" = selectedIds.has(id) ? "remove" : "add";
+    const base = new Set(selectedIds);
+    dragState.current = { startId: id, mode, base };
+    setDragging(true);
+    aplicarRango(id, id, base, mode); // aplica ya la celda inicial
     setAnchorId(id);
   }
+
+  // Al entrar en otra celda con el botón pulsado, se extiende el rango.
+  function handleMontoMouseEnter(id: string) {
+    const ds = dragState.current;
+    if (!ds) return;
+    aplicarRango(ds.startId, id, ds.base, ds.mode);
+  }
+
+  // Soltar el botón en cualquier parte termina el arrastre.
+  useEffect(() => {
+    function terminarArrastre() {
+      if (!dragState.current) return;
+      dragState.current = null;
+      setDragging(false);
+    }
+    window.addEventListener("mouseup", terminarArrastre);
+    return () => window.removeEventListener("mouseup", terminarArrastre);
+  }, []);
 
   const todasSeleccionadas = filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
   const algunaSeleccionada = filtered.some((t) => selectedIds.has(t.id));
@@ -376,9 +407,12 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
           return (
             <button
               type="button"
-              onClick={(e) => handleMontoClick(row.original.id, e)}
+              draggable={false}
+              title="Pulsa y arrastra para seleccionar varias"
+              onMouseDown={(e) => handleMontoMouseDown(row.original.id, e)}
+              onMouseEnter={() => handleMontoMouseEnter(row.original.id)}
               className={
-                "w-full rounded px-2 py-1 text-right text-mono-amount font-medium transition-colors " +
+                "w-full select-none rounded px-2 py-1 text-right text-mono-amount font-medium transition-colors " +
                 (esIngreso ? "text-accent-success" : "text-accent-danger") +
                 (seleccionada ? " bg-primary/10 ring-1 ring-primary/30" : "")
               }
@@ -609,7 +643,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className={"overflow-x-auto rounded-lg border" + (dragging ? " select-none" : "")}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
