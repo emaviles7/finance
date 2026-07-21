@@ -264,10 +264,10 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     setSelectedIds(next);
   }
 
-  // Pulsar sobre un monto inicia el arrastre. Si arranca sobre una celda ya
-  // seleccionada, el arrastre DESELECCIONA (como en Excel); si no, selecciona.
-  // Un simple click (sin mover) queda como alternar esa única celda.
-  function handleMontoMouseDown(id: string, e: MouseEvent) {
+  // Pulsar sobre una celda seleccionable (monto o estado) inicia el arrastre.
+  // Si arranca sobre una celda ya seleccionada, el arrastre DESELECCIONA (como
+  // en Excel); si no, selecciona. Un simple click (sin mover) alterna esa celda.
+  function handleSeleccionMouseDown(id: string, e: MouseEvent) {
     if (e.button !== 0) return; // solo botón primario
     e.preventDefault();
 
@@ -286,7 +286,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
   }
 
   // Al entrar en otra celda con el botón pulsado, se extiende el rango.
-  function handleMontoMouseEnter(id: string) {
+  function handleSeleccionMouseEnter(id: string) {
     const ds = dragState.current;
     if (!ds) return;
     aplicarRango(ds.startId, id, ds.base, ds.mode);
@@ -409,8 +409,8 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
               type="button"
               draggable={false}
               title="Pulsa y arrastra para seleccionar varias"
-              onMouseDown={(e) => handleMontoMouseDown(row.original.id, e)}
-              onMouseEnter={() => handleMontoMouseEnter(row.original.id)}
+              onMouseDown={(e) => handleSeleccionMouseDown(row.original.id, e)}
+              onMouseEnter={() => handleSeleccionMouseEnter(row.original.id)}
               className={
                 "w-full select-none rounded px-2 py-1 text-right text-mono-amount font-medium transition-colors " +
                 (esIngreso ? "text-accent-success" : "text-accent-danger") +
@@ -428,25 +428,42 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         header: "Estado",
         cell: ({ row }) => {
           const pago = getPago(row.original);
+          const seleccionada = selectedIds.has(row.original.id);
           return (
-            <label className="flex cursor-pointer items-center gap-2">
+            <div className="flex items-center gap-2">
+              {/* El checkbox alterna el estado de pago de esa fila. */}
               <input
                 type="checkbox"
-                className="size-4"
+                className="size-4 cursor-pointer"
+                aria-label={pago.pagado ? "Marcar como pendiente" : "Marcar como pagado"}
                 checked={pago.pagado}
                 disabled={pagoPendingId === row.original.id}
                 onChange={() => togglePagado(row.original)}
               />
-              <Badge
+              {/* La etiqueta se puede pulsar y arrastrar para seleccionar
+                  filas (misma selección/suma que la columna Monto). */}
+              <button
+                type="button"
+                draggable={false}
+                title="Pulsa y arrastra para seleccionar varias"
+                onMouseDown={(e) => handleSeleccionMouseDown(row.original.id, e)}
+                onMouseEnter={() => handleSeleccionMouseEnter(row.original.id)}
                 className={
-                  pago.pagado
-                    ? "bg-accent-success/15 text-accent-success"
-                    : "bg-accent-warning/15 text-accent-warning"
+                  "select-none rounded-full transition-shadow " +
+                  (seleccionada ? "ring-2 ring-primary/40 ring-offset-1" : "")
                 }
               >
-                {pago.pagado ? "Pagado" : "Pendiente"}
-              </Badge>
-            </label>
+                <Badge
+                  className={
+                    pago.pagado
+                      ? "bg-accent-success/15 text-accent-success"
+                      : "bg-accent-warning/15 text-accent-warning"
+                  }
+                >
+                  {pago.pagado ? "Pagado" : "Pendiente"}
+                </Badge>
+              </button>
+            </div>
           );
         },
       },
