@@ -22,7 +22,45 @@ export default async function TransaccionesPage() {
   const familiaId = miembro?.familia_id;
   const hoy = new Date();
 
-  const [{ data: cuentaMadre }, { data: metodosPago }, { data: lineas }, { data: transacciones }] =
+  const TRANSACCIONES_SELECT = `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
+     linea_id, metodo_pago, pagado, fecha_pagado,
+     linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, color, categorias(nombre))`;
+
+  // Trae TODAS las transacciones de la familia, sin límite de fecha ni de
+  // cantidad. Se pagina en lotes porque PostgREST limita cada respuesta (por
+  // defecto 1000 filas): antes un `.limit(200)` ocultaba las transacciones
+  // más antiguas (p. ej. las de mayo), aunque seguían en la base de datos.
+  async function cargarTransacciones() {
+    const LOTE = 1000;
+    const primero = await supabase
+      .from("transacciones")
+      .select(TRANSACCIONES_SELECT)
+      .eq("familia_id", familiaId)
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(0, LOTE - 1);
+    if (primero.error) throw new Error(primero.error.message);
+
+    const acumulado = primero.data ?? [];
+    let desde = LOTE;
+    // Mientras el último lote vino lleno, puede haber más filas por traer.
+    while (acumulado.length === desde) {
+      const siguiente = await supabase
+        .from("transacciones")
+        .select(TRANSACCIONES_SELECT)
+        .eq("familia_id", familiaId)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false })
+        .range(desde, desde + LOTE - 1);
+      if (siguiente.error) throw new Error(siguiente.error.message);
+      if (!siguiente.data?.length) break;
+      acumulado.push(...siguiente.data);
+      desde += LOTE;
+    }
+    return acumulado;
+  }
+
+  const [{ data: cuentaMadre }, { data: metodosPago }, { data: lineas }, transacciones] =
     await Promise.all([
       supabase
         .from("cuentas")
@@ -44,17 +82,7 @@ export default async function TransaccionesPage() {
         .eq("familia_id", familiaId)
         .eq("activa", true)
         .order("orden"),
-      supabase
-        .from("transacciones")
-        .select(
-          `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
-           linea_id, metodo_pago, pagado, fecha_pagado,
-           linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, color, categorias(nombre))`
-        )
-        .eq("familia_id", familiaId)
-        .order("fecha", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(200),
+      cargarTransacciones(),
     ]);
 
   const cuentaMadreId = cuentaMadre?.id ?? "";
