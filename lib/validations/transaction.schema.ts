@@ -21,6 +21,9 @@ export const transaccionSchema = z.object({
   cuenta_destino_id: z.string().uuid().optional().or(z.literal("")),
   destinatario_externo: z.string().max(150).optional().or(z.literal("")),
   linea_id: z.string().uuid().optional().or(z.literal("")),
+  // Solo el formulario de Cuenta Madre lo envía en true: el ingreso suma a la
+  // Madre y, si hay línea, también a esa línea. No es una columna de la BD.
+  acreditar_cuenta_madre: z.boolean().optional(),
   metodo_pago: z.string().max(100).optional().or(z.literal("")),
   guardarBeneficiario: z.boolean().optional(),
   notas: z.string().optional().or(z.literal("")),

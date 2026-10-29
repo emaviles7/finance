@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSeleccionFilas } from "@/hooks/useSeleccionFilas";
+import { claveLibroFila, resumirSeleccion } from "@/lib/utils/seleccion-filas";
 import {
   Table,
   TableBody,
@@ -67,6 +69,17 @@ export function LibroContableTable({ filas }: { filas: LibroContableRow[] }) {
     });
   }, [filas, search, fechaInicio, fechaFin, orden]);
 
+  const filasConClave = useMemo(
+    () => filtered.map((f) => ({ ...f, clave: claveLibroFila(f) })),
+    [filtered]
+  );
+  const idsEnOrden = useMemo(() => filasConClave.map((f) => f.clave), [filasConClave]);
+  const { selectedIds, dragging, rowProps, limpiar } = useSeleccionFilas(idsEnOrden);
+  const resumen = useMemo(
+    () => resumirSeleccion(filasConClave, selectedIds),
+    [filasConClave, selectedIds]
+  );
+
   if (filas.length === 0) {
     return (
       <Card>
@@ -116,7 +129,59 @@ export function LibroContableTable({ filas }: { filas: LibroContableRow[] }) {
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <p className="text-xs text-muted-foreground">
+        Selecciona ingresos o egresos para ver la suma. Clic, Mayús, Ctrl o arrastrar; en el teléfono, toca
+        para marcar o desmarcar.
+      </p>
+
+      {resumen.count > 0 && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-primary/5 px-3 py-2 text-sm"
+          data-testid="suma-seleccion"
+        >
+          <span>
+            {resumen.count} movimiento{resumen.count === 1 ? "" : "s"} seleccionado
+            {resumen.count === 1 ? "" : "s"}
+            {" · "}
+            {resumen.ingresos > 0 && resumen.egresos > 0 ? (
+              <>
+                Ingresos{" "}
+                <span className="text-mono-amount font-medium text-accent-success">
+                  {formatCurrency(resumen.ingresos)}
+                </span>
+                {" · "}
+                Egresos{" "}
+                <span className="text-mono-amount font-medium text-accent-danger">
+                  {formatCurrency(resumen.egresos)}
+                </span>
+                {" · "}
+                Neto{" "}
+                <span
+                  className={
+                    "text-mono-amount font-medium " +
+                    (resumen.neto < 0 ? "text-accent-danger" : "text-accent-success")
+                  }
+                >
+                  {formatCurrency(resumen.neto)}
+                </span>
+              </>
+            ) : (
+              <>
+                Suma{" "}
+                <span className="text-mono-amount font-medium">
+                  {formatCurrency(resumen.egresos > 0 ? resumen.egresos : resumen.ingresos)}
+                </span>
+              </>
+            )}
+          </span>
+          <Button variant="ghost" size="sm" onClick={limpiar}>
+            <XIcon className="size-4" />
+            Limpiar selección
+          </Button>
+        </div>
+      )}
+
+      <div className={"overflow-x-auto rounded-lg border" + (dragging ? " select-none" : "")}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -136,8 +201,12 @@ export function LibroContableTable({ filas }: { filas: LibroContableRow[] }) {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((f, i) => (
-                <TableRow key={f.id ?? `presupuesto-${i}`}>
+              filasConClave.map((f) => (
+                <TableRow
+                  key={f.clave}
+                  {...rowProps(f.clave)}
+                  className="cursor-pointer touch-manipulation"
+                >
                   <TableCell className="whitespace-nowrap">{formatDate(f.fecha)}</TableCell>
                   <TableCell>{f.descripcion}</TableCell>
                   <TableCell className="text-mono-amount text-right text-accent-success">
@@ -149,7 +218,7 @@ export function LibroContableTable({ filas }: { filas: LibroContableRow[] }) {
                   <TableCell className="text-mono-amount text-right font-medium">
                     {formatCurrency(f.balance)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-no-select>
                     {f.id && f.tipo === "ajuste_linea" && (
                       <LedgerRowActions kind="ajuste_linea" id={f.id} />
                     )}

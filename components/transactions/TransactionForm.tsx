@@ -38,6 +38,12 @@ interface TransactionFormProps {
   /** Nombre de la Cuenta Madre; se ofrece como origen por defecto en egresos. */
   cuentaMadreNombre?: string;
   defaultValues?: Partial<TransaccionFormInput>;
+  /**
+   * Nuevo ingreso abierto desde Cuenta Madre (o edición de un ingreso que ya
+   * suma a la Madre): el destino queda en la Cuenta Madre y la línea es un
+   * extra opcional. El monto cuenta en los dos lados, en una sola fila.
+   */
+  acreditarCuentaMadre?: boolean;
   submitting?: boolean;
   onSubmit: (values: TransaccionInput) => Promise<void>;
   onCancel?: () => void;
@@ -49,6 +55,7 @@ export function TransactionForm({
   cuentaMadreId,
   cuentaMadreNombre,
   defaultValues,
+  acreditarCuentaMadre = false,
   submitting,
   onSubmit,
   onCancel,
@@ -85,6 +92,7 @@ export function TransactionForm({
   // Destino de un ingreso: Cuenta Madre (saldo general) o una línea. Como
   // "línea vacía" = Cuenta Madre, se usa un valor centinela para el ítem.
   const CUENTA_MADRE = "__cuenta_madre__";
+  const NINGUNA_LINEA = "__ninguna__";
   // La Cuenta Madre se ofrece como un origen/método más (default en egresos).
   const opcionesMetodo =
     cuentaMadreNombre && !metodosPago.includes(cuentaMadreNombre)
@@ -258,6 +266,61 @@ export function TransactionForm({
         </div>
       )}
 
+      {tipo === "ingreso" && acreditarCuentaMadre ? (
+        <>
+          <div className="space-y-2">
+            <Label>Destino del ingreso</Label>
+            <div className="flex h-8 w-full items-center rounded-lg border border-input bg-muted/40 px-2.5 text-sm">
+              {cuentaMadreNombre ? `${cuentaMadreNombre} (saldo general)` : "Cuenta Madre (saldo general)"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Este ingreso suma al saldo de la Cuenta Madre.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Línea presupuestaria (opcional)</Label>
+            <Controller
+              control={control}
+              name="linea_id"
+              render={({ field }) => (
+                <Select
+                  value={field.value || NINGUNA_LINEA}
+                  onValueChange={(v) => field.onChange(!v || v === NINGUNA_LINEA ? "" : v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="(Ninguna)">
+                      {(v: string) =>
+                        !v || v === NINGUNA_LINEA
+                          ? "(Ninguna)"
+                          : lineas.find((l) => l.id === v)?.nombre ?? "(Ninguna)"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NINGUNA_LINEA}>(Ninguna)</SelectItem>
+                    {Array.from(gruposLineas.entries()).map(([categoriaNombre, lineasDeCategoria]) => (
+                      <SelectGroup key={categoriaNombre}>
+                        <SelectLabel>{categoriaNombre}</SelectLabel>
+                        {lineasDeCategoria.map((l) => (
+                          <SelectItem key={l.id} value={l.id}>
+                            {l.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.linea_id && <p className="text-xs text-destructive">{errors.linea_id.message}</p>}
+            <p className="text-xs text-muted-foreground">
+              {lineaSeleccionada
+                ? "También suma al disponible de la línea elegida. En Transacciones y en los totales se cuenta una sola vez."
+                : "Si eliges una línea, el monto también suma a su disponible, sin duplicarse en Transacciones."}
+            </p>
+          </div>
+        </>
+      ) : (
       <div className="space-y-2">
         <Label>{tipo === "ingreso" ? "Destino del ingreso" : "Línea presupuestaria (opcional)"}</Label>
         <Controller
@@ -326,6 +389,7 @@ export function TransactionForm({
           </p>
         )}
       </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="notas">Nota (opcional)</Label>

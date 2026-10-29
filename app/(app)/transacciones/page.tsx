@@ -23,7 +23,7 @@ export default async function TransaccionesPage() {
   const hoy = new Date();
 
   const TRANSACCIONES_SELECT = `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
-     linea_id, metodo_pago, pagado, fecha_pagado,
+     linea_id, metodo_pago, pagado, fecha_pagado, cuenta_origen_id,
      linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, color, categorias(nombre))`;
 
   // Trae TODAS las transacciones de la familia, sin límite de fecha ni de
@@ -125,6 +125,7 @@ export default async function TransaccionesPage() {
       pagado: t.pagado ?? true,
       fecha_pagado: t.fecha_pagado,
       es_ajuste_saldo: t.es_ajuste_saldo ?? false,
+      cuenta_origen_id: t.cuenta_origen_id,
     };
   });
 

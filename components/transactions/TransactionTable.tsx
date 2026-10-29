@@ -18,10 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +33,6 @@ import {
   Trash2Icon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ArrowUpDownIcon,
   XIcon,
   StickyNoteIcon,
   CheckIcon,
@@ -52,7 +49,13 @@ import {
 import { showUndoToast } from "@/lib/utils/undo-toast";
 import { ColorChip } from "@/components/shared/ColorChip";
 import { TransactionSheet } from "./TransactionSheet";
+import { MovimientoFilterBar } from "./MovimientoFilterBar";
 import { type LineaOption } from "./TransactionForm";
+import {
+  coincideMovimiento,
+  ordenarPorFecha,
+  type FiltrosMovimiento,
+} from "@/lib/utils/movimiento-filtros";
 
 export type TransaccionRow = {
   id: string;
@@ -72,6 +75,8 @@ export type TransaccionRow = {
   pagado: boolean;
   fecha_pagado: string | null;
   es_ajuste_saldo: boolean;
+  /** Presente cuando el ingreso ya suma al saldo de la Cuenta Madre. */
+  cuenta_origen_id?: string | null;
 };
 
 interface TransactionTableProps {
@@ -82,25 +87,17 @@ interface TransactionTableProps {
   cuentaMadreNombre?: string;
 }
 
-const FILTROS_INICIALES = {
-  search: "",
-  tiposFiltro: [] as string[],
-  metodosFiltro: [] as string[],
-  lineasFiltro: [] as string[],
-  estadosFiltro: [] as string[],
-  fechaInicio: "",
-  fechaFin: "",
-};
-
 export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cuentaMadreNombre }: TransactionTableProps) {
   const router = useRouter();
-  const [search, setSearch] = useState(FILTROS_INICIALES.search);
-  const [tiposFiltro, setTiposFiltro] = useState<string[]>(FILTROS_INICIALES.tiposFiltro);
-  const [metodosFiltro, setMetodosFiltro] = useState<string[]>(FILTROS_INICIALES.metodosFiltro);
-  const [lineasFiltro, setLineasFiltro] = useState<string[]>(FILTROS_INICIALES.lineasFiltro);
-  const [estadosFiltro, setEstadosFiltro] = useState<string[]>(FILTROS_INICIALES.estadosFiltro);
-  const [fechaInicio, setFechaInicio] = useState(FILTROS_INICIALES.fechaInicio);
-  const [fechaFin, setFechaFin] = useState(FILTROS_INICIALES.fechaFin);
+  const [filtros, setFiltros] = useState<FiltrosMovimiento>({
+    search: "",
+    tipos: [],
+    metodos: [],
+    lineas: [],
+    estados: [],
+    fechaInicio: "",
+    fechaFin: "",
+  });
   const [orden, setOrden] = useState<"desc" | "asc">("desc");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -178,53 +175,26 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
     aplicarPago(row.id, true, fecha || null);
   }
 
-  const hayFiltrosActivos =
-    search !== "" ||
-    tiposFiltro.length > 0 ||
-    metodosFiltro.length > 0 ||
-    lineasFiltro.length > 0 ||
-    estadosFiltro.length > 0 ||
-    fechaInicio !== "" ||
-    fechaFin !== "";
-
-  function limpiarFiltros() {
-    setSearch(FILTROS_INICIALES.search);
-    setTiposFiltro(FILTROS_INICIALES.tiposFiltro);
-    setMetodosFiltro(FILTROS_INICIALES.metodosFiltro);
-    setLineasFiltro(FILTROS_INICIALES.lineasFiltro);
-    setEstadosFiltro(FILTROS_INICIALES.estadosFiltro);
-    setFechaInicio(FILTROS_INICIALES.fechaInicio);
-    setFechaFin(FILTROS_INICIALES.fechaFin);
-  }
-
   const filtered = useMemo(() => {
-    const resultado = data.filter((t) => {
-      if (tiposFiltro.length > 0 && !tiposFiltro.includes(t.tipo)) return false;
-      if (metodosFiltro.length > 0 && !metodosFiltro.includes(t.metodo_pago ?? "")) return false;
-      if (lineasFiltro.length > 0 && !lineasFiltro.includes(t.linea_id ?? "")) return false;
-      if (estadosFiltro.length > 0) {
-        const estado = getPago(t).pagado ? "pagado" : "pendiente";
-        if (!estadosFiltro.includes(estado)) return false;
-      }
-      if (fechaInicio && t.fecha < fechaInicio) return false;
-      if (fechaFin && t.fecha > fechaFin) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        if (
-          !t.descripcion.toLowerCase().includes(q) &&
-          !(t.comercio ?? "").toLowerCase().includes(q)
-        ) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    return resultado.sort((a, b) =>
-      orden === "desc" ? b.fecha.localeCompare(a.fecha) : a.fecha.localeCompare(b.fecha)
+    const resultado = data.filter((t) =>
+      coincideMovimiento(
+        {
+          fecha: t.fecha,
+          descripcion: t.descripcion,
+          comercio: t.comercio,
+          destinatario: t.destinatario_externo,
+          tipo: t.tipo,
+          metodo_pago: t.metodo_pago,
+          linea_id: t.linea_id,
+          pagado: getPago(t).pagado,
+        },
+        filtros
+      )
     );
+
+    return ordenarPorFecha(resultado, orden);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, search, tiposFiltro, metodosFiltro, lineasFiltro, estadosFiltro, pagoOverrides, fechaInicio, fechaFin, orden]);
+  }, [data, filtros, pagoOverrides, orden]);
 
   // Si cambian los filtros y una fila seleccionada deja de estar visible, se
   // quita de la selección para que la suma mostrada nunca incluya montos ocultos.
@@ -496,6 +466,7 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
               lineas={lineas}
               cuentaMadreId={cuentaMadreId}
               cuentaMadreNombre={cuentaMadreNombre}
+              acreditarCuentaMadre={row.original.tipo === "ingreso" && !!row.original.cuenta_origen_id}
               defaultValues={{
                 fecha: row.original.fecha,
                 descripcion: row.original.descripcion,
@@ -593,72 +564,14 @@ export function TransactionTable({ data, metodosPago, lineas, cuentaMadreId, cue
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="Buscar por descripción o destinatario..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
-        />
-        <MultiSelect
-          placeholder="Todos los tipos"
-          selected={tiposFiltro}
-          onChange={setTiposFiltro}
-          options={[
-            { value: "ingreso", label: "Ingreso" },
-            { value: "egreso", label: "Egreso" },
-          ]}
-        />
-        <MultiSelect
-          placeholder="Todos los métodos"
-          selected={metodosFiltro}
-          onChange={setMetodosFiltro}
-          options={metodosPago.map((m) => ({ value: m, label: m }))}
-        />
-        <MultiSelect
-          placeholder="Todas las líneas"
-          selected={lineasFiltro}
-          onChange={setLineasFiltro}
-          options={lineas.map((l) => ({ value: l.id, label: l.nombre }))}
-        />
-        <MultiSelect
-          placeholder="Todos los estados"
-          selected={estadosFiltro}
-          onChange={setEstadosFiltro}
-          options={[
-            { value: "pagado", label: "Pagado" },
-            { value: "pendiente", label: "Pendiente" },
-          ]}
-        />
-        <Input
-          type="date"
-          value={fechaInicio}
-          onChange={(e) => setFechaInicio(e.target.value)}
-          className="w-36"
-          aria-label="Fecha inicial"
-        />
-        <Input
-          type="date"
-          value={fechaFin}
-          onChange={(e) => setFechaFin(e.target.value)}
-          className="w-36"
-          aria-label="Fecha final"
-        />
-        <Button
-          variant="outline"
-          size="icon-sm"
-          onClick={() => setOrden(orden === "desc" ? "asc" : "desc")}
-          title={orden === "desc" ? "Más recientes primero" : "Más antiguas primero"}
-        >
-          <ArrowUpDownIcon className="size-4" />
-        </Button>
-        {hayFiltrosActivos && (
-          <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
-            <XIcon className="size-4" />
-            Limpiar filtros
-          </Button>
-        )}
-      </div>
+      <MovimientoFilterBar
+        filtros={filtros}
+        onChange={setFiltros}
+        metodosPago={metodosPago}
+        lineas={lineas}
+        orden={orden}
+        onOrden={setOrden}
+      />
 
       <div className={"overflow-x-auto rounded-lg border" + (dragging ? " select-none" : "")}>
         <Table>

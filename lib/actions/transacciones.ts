@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { transaccionSchema, type TransaccionInput } from "@/lib/validations/transaction.schema";
+import { ingresoSoloEnLinea } from "@/lib/utils/ingreso-destino";
 
 const DESCRIPCION_DEFECTO: Record<string, string> = {
   ingreso: "Ingreso",
@@ -52,13 +53,13 @@ async function resolverCuentaOrigen(
 export async function crearTransaccion(input: TransaccionInput): Promise<{ id: string }> {
   const parsed = transaccionSchema.parse(input);
   const { supabase, familiaId, userId } = await getFamiliaId();
-  // Un ingreso con destino en una línea presupuestaria NO toca la Cuenta Madre:
-  // se deja cuenta_origen_id en null (el trigger de saldo no la afecta) y solo
-  // suma al disponible de la línea. El resto se contabiliza contra la Madre.
-  const cuentaOrigenId =
-    parsed.tipo === "ingreso" && parsed.linea_id
-      ? null
-      : await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
+  // Ingreso solo a una línea: no toca la Cuenta Madre. Si el formulario pide
+  // acreditar la Madre (Nuevo ingreso dentro de Cuenta Madre), la misma fila
+  // suma al saldo de la Madre y al disponible de la línea. No se crea otra
+  // transacción, así que Transacciones y los totales la ven una sola vez.
+  const cuentaOrigenId = ingresoSoloEnLinea(parsed.tipo, parsed.linea_id, parsed.acreditar_cuenta_madre)
+    ? null
+    : await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
 
   const { data, error } = await supabase
     .from("transacciones")
@@ -101,17 +102,22 @@ export async function crearTransaccion(input: TransaccionInput): Promise<{ id: s
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
   revalidatePath("/presupuestos");
+  if (parsed.linea_id) revalidatePath(`/presupuestos/${parsed.linea_id}`);
   return { id: data.id };
 }
 
 export async function actualizarTransaccion(id: string, input: TransaccionInput) {
   const parsed = transaccionSchema.parse(input);
   const { supabase, familiaId } = await getFamiliaId();
-  // Igual que al crear: un ingreso con destino en una línea no toca la Madre.
-  const cuentaOrigenId =
-    parsed.tipo === "ingreso" && parsed.linea_id
-      ? null
-      : await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
+  const { data: previa } = await supabase
+    .from("transacciones")
+    .select("linea_id")
+    .eq("id", id)
+    .maybeSingle();
+  // Igual que al crear: línea sola no toca la Madre; con acreditar sí.
+  const cuentaOrigenId = ingresoSoloEnLinea(parsed.tipo, parsed.linea_id, parsed.acreditar_cuenta_madre)
+    ? null
+    : await resolverCuentaOrigen(supabase, familiaId, parsed.cuenta_origen_id);
 
   const { error } = await supabase
     .from("transacciones")
@@ -138,8 +144,7 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
   // Las actualizaciones no disparan el trigger de saldo (solo AFTER INSERT),
   // así que recalculamos los saldos de las cuentas implicadas explícitamente.
   await recalcularSaldosTransaccion(id);
-  // La Cuenta Madre pudo ganar o perder este movimiento (p. ej. un ingreso que
-  // pasa a tener destino en una línea deja de sumar a la Madre), así que se
+  // La Cuenta Madre pudo ganar o perder este movimiento, así que se
   // recalcula siempre su saldo desde cero.
   const { data: madre } = await supabase
     .from("cuentas")
@@ -156,6 +161,10 @@ export async function actualizarTransaccion(id: string, input: TransaccionInput)
   revalidatePath("/cuentas");
   revalidatePath("/dashboard");
   revalidatePath("/presupuestos");
+  if (previa?.linea_id) revalidatePath(`/presupuestos/${previa.linea_id}`);
+  if (parsed.linea_id && parsed.linea_id !== previa?.linea_id) {
+    revalidatePath(`/presupuestos/${parsed.linea_id}`);
+  }
 }
 
 /**

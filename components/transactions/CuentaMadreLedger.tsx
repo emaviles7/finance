@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -19,12 +19,20 @@ import { formatDate } from "@/lib/utils/dates";
 import { eliminarTransaccion, restaurarTransaccion } from "@/lib/actions/transacciones";
 import { showUndoToast } from "@/lib/utils/undo-toast";
 import { TransactionSheet } from "./TransactionSheet";
+import { MovimientoFilterBar } from "./MovimientoFilterBar";
 import { type LineaOption } from "./TransactionForm";
+import {
+  coincideMovimiento,
+  ordenarPorFecha,
+  type FiltrosMovimiento,
+} from "@/lib/utils/movimiento-filtros";
 
 export type LedgerRow = {
   id: string;
   fecha: string;
+  createdAt: string;
   descripcion: string;
+  comercio: string | null;
   origen: string | null;
   origenColor: string | null;
   destino: string | null;
@@ -35,11 +43,13 @@ export type LedgerRow = {
   delta: number;
   balance: number;
   esAjuste: boolean;
-  // Campos para edición
+  // Campos para edición y filtros
   monto: number;
   tipo: "ingreso" | "egreso" | "transferencia" | "transferencia_externa";
   linea_id: string | null;
   metodo_pago: string | null;
+  pagado: boolean;
+  cuentaOrigenId: string | null;
 };
 
 export function CuentaMadreLedger({
@@ -57,6 +67,38 @@ export function CuentaMadreLedger({
 }) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [filtros, setFiltros] = useState<FiltrosMovimiento>({
+    search: "",
+    tipos: [],
+    metodos: [],
+    lineas: [],
+    estados: [],
+    fechaInicio: "",
+    fechaFin: "",
+  });
+  // Lo más reciente arriba, para ver el balance actual sin bajar al final.
+  const [orden, setOrden] = useState<"asc" | "desc">("desc");
+
+  const visibles = useMemo(() => {
+    const filtradas = rows.filter((f) =>
+      coincideMovimiento(
+        {
+          fecha: f.fecha,
+          descripcion: f.descripcion,
+          comercio: f.comercio,
+          destinatario: f.destino,
+          tipo: f.tipo,
+          metodo_pago: f.metodo_pago,
+          linea_id: f.linea_id,
+          pagado: f.pagado,
+        },
+        filtros
+      )
+    );
+    // El balance ya viene calculado en orden cronológico. Aquí solo se
+    // reordena la vista; no se vuelve a acumular.
+    return ordenarPorFecha(filtradas, orden);
+  }, [rows, filtros, orden]);
 
   async function handleDelete(id: string) {
     setDeletingId(id);
@@ -75,6 +117,21 @@ export function CuentaMadreLedger({
   }
 
   return (
+    <div className="space-y-3">
+      <MovimientoFilterBar
+        filtros={filtros}
+        onChange={setFiltros}
+        metodosPago={metodosPago}
+        lineas={lineas}
+        orden={orden}
+        onOrden={setOrden}
+      />
+      {visibles.length !== rows.length && (
+        <p className="text-xs text-muted-foreground">
+          Mostrando {visibles.length} de {rows.length} movimientos. El balance de cada fila es el saldo
+          real después de ese movimiento.
+        </p>
+      )}
     <div className="overflow-x-auto rounded-lg border">
       <Table>
         <TableHeader>
@@ -92,7 +149,14 @@ export function CuentaMadreLedger({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((f) => (
+          {visibles.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
+                No hay movimientos que coincidan con los filtros.
+              </TableCell>
+            </TableRow>
+          ) : (
+          visibles.map((f) => (
             <TableRow key={f.id}>
               <TableCell className="whitespace-nowrap">{formatDate(f.fecha)}</TableCell>
               <TableCell>{f.esAjuste ? "Ajuste de saldo" : f.descripcion}</TableCell>
@@ -137,6 +201,7 @@ export function CuentaMadreLedger({
                       lineas={lineas}
                       cuentaMadreId={cuentaMadreId}
                       cuentaMadreNombre={cuentaMadreNombre}
+                      acreditarCuentaMadre={f.tipo === "ingreso" && !!f.cuentaOrigenId}
                       defaultValues={{
                         fecha: f.fecha,
                         descripcion: f.descripcion,
@@ -166,9 +231,11 @@ export function CuentaMadreLedger({
                 </div>
               </TableCell>
             </TableRow>
-          ))}
+          ))
+          )}
         </TableBody>
       </Table>
+    </div>
     </div>
   );
 }
