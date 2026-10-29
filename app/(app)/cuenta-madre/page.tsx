@@ -4,12 +4,11 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { AjustarSaldoDialog } from "@/components/transactions/AjustarSaldoDialog";
 import { CuentaMadreLedger, type LedgerRow } from "@/components/transactions/CuentaMadreLedger";
+import { afectaCuentaMadre, conBalanceAcumulado, deltaCuentaMadre } from "@/lib/utils/cuenta-madre-balance";
 import { ExportarBackupButton } from "@/components/shared/ExportarBackupButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
-
-type TxTipo = "ingreso" | "egreso" | "transferencia" | "transferencia_externa";
 
 function unwrap<T>(rel: unknown): T | null {
   if (!rel) return null;
@@ -53,20 +52,36 @@ export default async function CuentaMadrePage() {
     );
   }
 
-  const [{ data: transacciones }, { data: metodosPago }, { data: lineas }] = await Promise.all([
-    supabase
-      .from("transacciones")
-      .select(
-        `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
-         linea_id, metodo_pago, cuenta_origen_id, cuenta_destino_id,
-         linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, color)`
-      )
-      .eq("familia_id", familiaId)
-      .or(`cuenta_origen_id.eq.${cuenta.id},cuenta_destino_id.eq.${cuenta.id}`)
-      // Orden cronológico (desde la creación) para que el balance acumulado
-      // fluya naturalmente de arriba hacia abajo.
-      .order("fecha", { ascending: true })
-      .order("created_at", { ascending: true }),
+  const cuentaId = cuenta.id;
+
+  const SELECT_TX = `id, fecha, descripcion, comercio, monto, tipo, notas, destinatario_externo, es_ajuste_saldo,
+         linea_id, metodo_pago, pagado, created_at, cuenta_origen_id, cuenta_destino_id,
+         linea:lineas_presupuestarias!transacciones_linea_id_fkey(nombre, color)`;
+
+  async function cargarMovimientos() {
+    const LOTE = 1000;
+    const acumulado = [];
+    let desde = 0;
+    for (;;) {
+      const pagina = await supabase
+        .from("transacciones")
+        .select(SELECT_TX)
+        .eq("familia_id", familiaId)
+        .or(`cuenta_origen_id.eq.${cuentaId},cuenta_destino_id.eq.${cuentaId}`)
+        .order("fecha", { ascending: true })
+        .order("created_at", { ascending: true })
+        .range(desde, desde + LOTE - 1);
+      if (pagina.error) throw new Error(pagina.error.message);
+      const filas = pagina.data ?? [];
+      acumulado.push(...filas);
+      if (filas.length < LOTE) break;
+      desde += LOTE;
+    }
+    return acumulado;
+  }
+
+  const [transacciones, { data: metodosPago }, { data: lineas }] = await Promise.all([
+    cargarMovimientos(),
     supabase
       .from("metodos_pago")
       .select("nombre, color")
@@ -95,67 +110,42 @@ export default async function CuentaMadrePage() {
     es_ingreso: unwrap<{ es_ingreso: boolean }>(l.categorias)?.es_ingreso ?? false,
   }));
 
-  // Delta respecto a la Cuenta Madre y balance acumulado desde el saldo inicial.
-  function deltaDe(t: {
-    tipo: TxTipo;
-    monto: number;
-    metodo_pago: string | null;
-    cuenta_origen_id: string | null;
-    cuenta_destino_id: string | null;
-  }) {
-    const monto = Number(t.monto);
-    if (t.cuenta_origen_id === cuenta!.id) {
-      if (t.tipo === "ingreso") return monto;
-      // Un egreso solo descuenta de la Cuenta Madre si se pagó CON ella
-      // (su método de pago es el nombre de la cuenta). Con otro método, no
-      // afecta su saldo.
-      if (t.tipo === "egreso") return t.metodo_pago === cuenta!.nombre ? -monto : 0;
-      // Transferencia interna/externa: el dinero sale de la cuenta.
-      return -monto;
-    }
-    if (t.cuenta_destino_id === cuenta!.id && t.tipo === "transferencia") {
-      return monto;
-    }
-    return 0;
-  }
+  const cuentaRef = { id: cuenta.id, nombre: cuenta.nombre };
+  // El libro mayor solo muestra lo que toca el saldo. El balance se calcula
+  // del más antiguo al más nuevo; la tabla lo muestra al revés.
+  const conDelta = transacciones
+    .filter((t) => afectaCuentaMadre(t, cuentaRef))
+    .map((t) => {
+      const linea = unwrap<{ nombre: string; color: string | null }>(t.linea);
+      const origen = t.metodo_pago || t.comercio || null;
+      const destino =
+        t.tipo === "egreso" || t.tipo === "transferencia_externa" ? t.destinatario_externo : null;
+      return {
+        id: t.id,
+        fecha: t.fecha,
+        createdAt: t.created_at ?? t.fecha,
+        descripcion: t.descripcion,
+        comercio: t.comercio,
+        origen,
+        origenColor: origen ? metodoColores.get(origen) ?? null : null,
+        destino,
+        destinoColor: destino ? metodoColores.get(destino) ?? null : null,
+        lineaNombre: linea?.nombre ?? null,
+        lineaColor: linea?.color ?? null,
+        notas: t.notas,
+        delta: deltaCuentaMadre(t, cuentaRef),
+        esAjuste: t.es_ajuste_saldo ?? false,
+        monto: Number(t.monto),
+        tipo: t.tipo,
+        linea_id: t.linea_id,
+        metodo_pago: t.metodo_pago,
+        pagado: t.pagado ?? true,
+        cuentaOrigenId: t.cuenta_origen_id,
+      };
+    });
 
-  // El libro mayor de la Cuenta Madre solo muestra lo que la involucra: se
-  // ocultan los egresos pagados con OTRO método (no tocan su saldo).
-  const transaccionesCuentaMadre = (transacciones ?? []).filter(
-    (t) => !(t.tipo === "egreso" && t.metodo_pago !== cuenta.nombre)
-  );
-
-  let saldo = Number(cuenta.saldo_inicial);
-  const rows: LedgerRow[] = transaccionesCuentaMadre.map((t) => {
-    const delta = deltaDe(t);
-    saldo += delta;
-    const linea = unwrap<{ nombre: string; color: string | null }>(t.linea);
-    const origen = t.metodo_pago || t.comercio || null;
-    // Destino (a dónde se envió el dinero): guardado en destinatario_externo.
-    const destino =
-      t.tipo === "egreso" || t.tipo === "transferencia_externa" ? t.destinatario_externo : null;
-    return {
-      id: t.id,
-      fecha: t.fecha,
-      descripcion: t.descripcion,
-      origen,
-      origenColor: origen ? metodoColores.get(origen) ?? null : null,
-      destino,
-      destinoColor: destino ? metodoColores.get(destino) ?? null : null,
-      lineaNombre: linea?.nombre ?? null,
-      lineaColor: linea?.color ?? null,
-      notas: t.notas,
-      delta,
-      balance: saldo,
-      esAjuste: t.es_ajuste_saldo ?? false,
-      monto: Number(t.monto),
-      tipo: t.tipo,
-      linea_id: t.linea_id,
-      metodo_pago: t.metodo_pago,
-    };
-  });
-
-  const balanceActual = saldo;
+  const rows: LedgerRow[] = conBalanceAcumulado(conDelta, Number(cuenta.saldo_inicial));
+  const balanceActual = rows.length > 0 ? rows[rows.length - 1].balance : Number(cuenta.saldo_inicial);
 
   return (
     <div className="space-y-6">
@@ -175,6 +165,7 @@ export default async function CuentaMadrePage() {
             lineas={lineasOptions}
             cuentaMadreId={cuenta.id}
             cuentaMadreNombre={cuenta.nombre}
+            acreditarCuentaMadre
             defaultValues={{ tipo: "ingreso" }}
             trigger={
               <Button variant="outline">

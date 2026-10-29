@@ -25,6 +25,8 @@ interface TransactionSheetProps {
   mode?: "create" | "edit";
   transaccionId?: string;
   defaultValues?: Partial<TransaccionFormInput>;
+  /** El ingreso queda en la Cuenta Madre y puede, además, ir a una línea. */
+  acreditarCuentaMadre?: boolean;
   trigger?: React.ReactElement;
 }
 
@@ -36,6 +38,7 @@ export function TransactionSheet({
   mode = "create",
   transaccionId,
   defaultValues,
+  acreditarCuentaMadre = false,
   trigger,
 }: TransactionSheetProps) {
   const router = useRouter();
@@ -43,13 +46,17 @@ export function TransactionSheet({
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(values: TransaccionInput) {
+    const payload: TransaccionInput =
+      acreditarCuentaMadre && values.tipo === "ingreso"
+        ? { ...values, acreditar_cuenta_madre: true }
+        : values;
     setSubmitting(true);
     try {
       if (mode === "edit" && transaccionId) {
-        await actualizarTransaccion(transaccionId, values);
+        await actualizarTransaccion(transaccionId, payload);
         toast.success("Transacción actualizada");
       } else {
-        const { id } = await crearTransaccion(values);
+        const { id } = await crearTransaccion(payload);
         showUndoToast("Transacción creada", async () => {
           const tx = await eliminarTransaccion(id);
           showUndoToast("Creación deshecha", async () => {
@@ -90,6 +97,7 @@ export function TransactionSheet({
           cuentaMadreId={cuentaMadreId}
           cuentaMadreNombre={cuentaMadreNombre}
           defaultValues={defaultValues}
+          acreditarCuentaMadre={acreditarCuentaMadre}
           submitting={submitting}
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}

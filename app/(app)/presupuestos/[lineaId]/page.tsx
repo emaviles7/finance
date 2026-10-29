@@ -16,6 +16,14 @@ function unwrap<T>(rel: unknown): T | null {
   return (Array.isArray(rel) ? rel[0] : rel) as T;
 }
 
+function acumularBalance<T extends { delta: number }>(filas: T[]) {
+  let saldo = 0;
+  return filas.map((f) => {
+    saldo += f.delta;
+    return { ...f, balance: saldo };
+  });
+}
+
 type LedgerRow = {
   id: string | null;
   tipo: string | null;
@@ -217,13 +225,8 @@ export default async function LineaDetallePage({
     return a.createdAt.localeCompare(b.createdAt);
   });
 
-  let saldo = 0;
-  const filasConBalance = filas.map((f) => {
-    saldo += f.delta;
-    return { ...f, balance: saldo };
-  });
-
-  const balanceActual = saldo;
+  const filasConBalance = acumularBalance(filas);
+  const balanceActual = filasConBalance.at(-1)?.balance ?? 0;
 
   return (
     <div className="space-y-6">

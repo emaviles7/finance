@@ -52,7 +52,7 @@ export function PresupuestoGrid({
   }, [transferencias]);
 
   // Valor original (bruto) por celda, para detectar cambios.
-  const original = useMemo(() => {
+  const originalDesdeProps = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of presupuestos) {
       const k = cellKey(p.anio, p.linea_id, p.mes);
@@ -60,6 +60,17 @@ export function PresupuestoGrid({
     }
     return m;
   }, [presupuestos, transferNet]);
+
+  // Tras guardar, y hasta que lleguen props nuevas, la comparación de
+  // "sin cambios" usa esta copia. No se muta el mapa memorizado.
+  const [baseline, setBaseline] = useState<{
+    source: Map<string, number>;
+    values: Map<string, number>;
+  } | null>(null);
+  if (baseline && baseline.source !== originalDesdeProps) {
+    setBaseline(null);
+  }
+  const original = baseline && baseline.source === originalDesdeProps ? baseline.values : originalDesdeProps;
 
   const [valores, setValores] = useState<Map<string, string>>(() => {
     const tn = new Map<string, number>();
@@ -119,11 +130,13 @@ export function PresupuestoGrid({
     setGuardando(true);
     try {
       await guardarPresupuestosBatch(items);
+      const nextBaseline = new Map(original);
       for (const k of dirty.keys()) {
         const raw = (valores.get(k) ?? "").trim();
         if (raw === "") continue;
-        original.set(k, Number(raw));
+        nextBaseline.set(k, Number(raw));
       }
+      setBaseline({ source: originalDesdeProps, values: nextBaseline });
       setDirty(new Map());
       toast.success("Presupuesto guardado");
       router.refresh();
